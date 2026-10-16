@@ -53,8 +53,21 @@ export default function ExerciseCard({
             </span>
 
             {exercise.previous_performance && (
-              <span className="text-amber-400/90 font-medium flex items-center gap-1">
-                <span>⚡ คราวก่อน:</span>
+              <span
+                className={`font-medium flex items-center gap-1 ${
+                  exercise.previous_performance.is_from_current_location
+                    ? 'text-amber-400/90'
+                    : 'text-sky-400/90'
+                }`}
+                title={
+                  exercise.previous_performance.is_from_current_location
+                    ? 'สถิติล่าสุดจากสถานที่นี้'
+                    : `สถิติล่าสุดจาก: ${exercise.previous_performance.location_name || 'ที่อื่น'}`
+                }
+              >
+                <span>
+                  ⚡ {exercise.previous_performance.is_from_current_location ? 'คราวก่อน' : `เคยเล่นที่ ${exercise.previous_performance.location_name || 'อื่น'}`}:
+                </span>
                 <span className="font-bold">
                   {exercise.previous_performance.weight_or_pin}{' '}
                   {exercise.previous_performance.unit_type === 'pin' ? 'แผ่น' : 'kg'} ×{' '}

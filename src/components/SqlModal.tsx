@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS workouts (
   title TEXT NOT NULL DEFAULT 'Workout',
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   duration_seconds INT DEFAULT 0,
+  location_name TEXT,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -62,13 +62,21 @@ export default function HistoryModal({
                       <div className="font-black text-white text-base">
                         {session.title || 'Workout'}
                       </div>
-                      <div className="text-xs text-gray-400 flex items-center gap-2 mt-0.5">
+                      <div className="text-xs text-gray-400 flex items-center flex-wrap gap-2 mt-0.5">
                         <span>📅 {session.date}</span>
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 text-sky-400" />
                           {minutes} นาที
                         </span>
+                        {session.location_name && (
+                          <>
+                            <span>•</span>
+                            <span className="text-emerald-400 font-medium">
+                              📍 {session.location_name}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
 

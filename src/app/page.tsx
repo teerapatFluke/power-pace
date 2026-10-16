@@ -17,10 +17,19 @@ import {
   Flame,
   Settings,
   ChevronRight,
+  ChevronDown,
   Edit3,
+  MapPin,
 } from 'lucide-react';
-import { Exercise, WorkoutSession, WorkoutExercise, ExerciseSet } from '@/types/workout';
+import {
+  Exercise,
+  WorkoutSession,
+  WorkoutExercise,
+  ExerciseSet,
+  GymLocation,
+} from '@/types/workout';
 import { RoutinePreset } from '@/lib/workoutRoutines';
+import { DEFAULT_LOCATIONS } from '@/lib/defaultLocations';
 import {
   getLocalActiveWorkout,
   setLocalActiveWorkout,
@@ -36,6 +45,10 @@ import {
   resetLocalRoutines,
   fetchRoutinesFromSupabase,
   syncRoutinesToSupabase,
+  getLocalLocations,
+  saveLocalLocations,
+  getSelectedLocation,
+  setSelectedLocation,
 } from '@/lib/storage';
 import ExerciseCard from '@/components/ExerciseCard';
 import AddExerciseModal from '@/components/AddExerciseModal';
@@ -44,6 +57,7 @@ import WorkoutSummaryModal from '@/components/WorkoutSummaryModal';
 import HistoryModal from '@/components/HistoryModal';
 import SqlModal from '@/components/SqlModal';
 import RoutineManagerModal from '@/components/RoutineManagerModal';
+import LocationPickerModal from '@/components/LocationPickerModal';
 
 export default function Home() {
   // App State
@@ -51,12 +65,17 @@ export default function Home() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [routines, setRoutines] = useState<RoutinePreset[]>([]);
   const [history, setHistory] = useState<WorkoutSession[]>([]);
+  const [locations, setLocations] = useState<GymLocation[]>([]);
+  const [selectedLocation, setSelectedLocationState] = useState<GymLocation>(
+    DEFAULT_LOCATIONS[0]
+  );
 
   // Modals
   const [isAddExerciseOpen, setIsAddExerciseOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
   const [isRoutineManagerOpen, setIsRoutineManagerOpen] = useState(false);
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [finishedWorkout, setFinishedWorkout] = useState<WorkoutSession | null>(null);
   const [lastSyncSuccess, setLastSyncSuccess] = useState(false);
 
@@ -80,6 +99,12 @@ export default function Home() {
 
     const loadedRoutines = getLocalRoutines();
     setRoutines(loadedRoutines);
+
+    const loadedLocations = getLocalLocations();
+    setLocations(loadedLocations);
+
+    const currentLoc = getSelectedLocation();
+    setSelectedLocationState(currentLoc);
 
     const loadedHistory = getLocalWorkoutHistory();
     setHistory(loadedHistory);
@@ -130,6 +155,41 @@ export default function Home() {
     };
   }, [Boolean(activeWorkout)]);
 
+  // Handle location selection
+  const handleSelectLocation = (loc: GymLocation) => {
+    setSelectedLocationState(loc);
+    setSelectedLocation(loc);
+
+    // If an active workout is in progress, update its location tag as well
+    if (activeWorkout) {
+      setActiveWorkout((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          location_id: loc.id,
+          location_name: loc.name,
+        };
+      });
+    }
+  };
+
+  // Handle add location
+  const handleAddLocation = (newLoc: GymLocation) => {
+    const updated = [...locations, newLoc];
+    setLocations(updated);
+    saveLocalLocations(updated);
+  };
+
+  // Handle delete location
+  const handleDeleteLocation = (locId: string) => {
+    const updated = locations.filter((l) => l.id !== locId);
+    setLocations(updated);
+    saveLocalLocations(updated);
+    if (selectedLocation.id === locId && updated.length > 0) {
+      handleSelectLocation(updated[0]);
+    }
+  };
+
   // Start new empty workout
   const handleStartWorkout = (title = 'คอร์สเวทเทรนนิ่ง') => {
     const today = new Date().toISOString().split('T')[0];
@@ -138,6 +198,8 @@ export default function Home() {
       title,
       date: today,
       duration_seconds: 0,
+      location_id: selectedLocation.id,
+      location_name: selectedLocation.name,
       exercises: [],
       is_completed: false,
     };
@@ -154,7 +216,11 @@ export default function Home() {
       .map((exId, idx) => {
         const exercise = loadedExercises.find((e) => e.id === exId);
         if (!exercise) return null;
-        const lastPerf = findLastPerformance(exercise.id, exercise.name);
+        const lastPerf = findLastPerformance(
+          exercise.id,
+          exercise.name,
+          selectedLocation.id
+        );
         const initialWeight = lastPerf
           ? lastPerf.weight_or_pin
           : exercise.unit_type === 'pin'
@@ -187,6 +253,8 @@ export default function Home() {
       title: routine.name,
       date: today,
       duration_seconds: 0,
+      location_id: selectedLocation.id,
+      location_name: selectedLocation.name,
       exercises: initialExercises,
       is_completed: false,
     };
@@ -215,9 +283,17 @@ export default function Home() {
       handleStartWorkout();
     }
 
-    const lastPerf = findLastPerformance(exercise.id, exercise.name);
+    const lastPerf = findLastPerformance(
+      exercise.id,
+      exercise.name,
+      selectedLocation.id
+    );
 
-    const initialWeight = lastPerf ? lastPerf.weight_or_pin : exercise.unit_type === 'pin' ? 4 : 15;
+    const initialWeight = lastPerf
+      ? lastPerf.weight_or_pin
+      : exercise.unit_type === 'pin'
+      ? 4
+      : 15;
     const initialReps = lastPerf ? lastPerf.reps : 10;
 
     const newWorkoutExercise: WorkoutExercise = {
@@ -245,6 +321,8 @@ export default function Home() {
           title: 'คอร์สเวทเทรนนิ่ง',
           date: new Date().toISOString().split('T')[0],
           duration_seconds: 0,
+          location_id: selectedLocation.id,
+          location_name: selectedLocation.name,
           exercises: [newWorkoutExercise],
           is_completed: false,
         };
@@ -420,6 +498,8 @@ export default function Home() {
     const completedWorkout: WorkoutSession = {
       ...activeWorkout,
       is_completed: true,
+      location_id: selectedLocation.id,
+      location_name: selectedLocation.name,
     };
 
     // Save to local storage history
@@ -448,7 +528,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#090c10] text-[#f0f3f6] pb-28">
       {/* Top Header / App Bar */}
-      <header className="sticky top-0 z-40 bg-[#090c10]/90 backdrop-blur-md border-b border-white/5 px-4 py-3">
+      <header className="sticky top-0 z-40 bg-[#090c10]/95 backdrop-blur-md border-b border-white/5 px-4 py-3">
         <div className="max-w-xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-emerald-400 flex items-center justify-center text-black font-black shadow-lg shadow-emerald-500/20">
@@ -500,6 +580,26 @@ export default function Home() {
             </button>
           </div>
         </div>
+
+        {/* Location Switcher Sub-header bar */}
+        <div className="max-w-xl mx-auto pt-2.5 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setIsLocationPickerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161d2a] hover:bg-[#1c2637] border border-white/10 text-xs font-bold text-white transition active:scale-95 shadow-sm"
+          >
+            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-gray-400 font-normal">เล่นที่:</span>
+            <span className="text-emerald-300 truncate max-w-[170px] sm:max-w-[220px]">
+              {selectedLocation.name}
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-0.5" />
+          </button>
+
+          <span className="text-[11px] text-gray-500 font-medium hidden sm:inline">
+            ประวัติน้ำหนักแผ่นจะแยกตามสถานที่นี้
+          </span>
+        </div>
       </header>
 
       {/* Main Content Area */}
@@ -515,7 +615,7 @@ export default function Home() {
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                   </span>
                   <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
-                    กำลังฝึกซ้อมอยู่ (Workout in Progress)
+                    กำลังฝึกซ้อมอยู่ @ {activeWorkout.location_name || selectedLocation.name}
                   </span>
                 </div>
                 <h2 className="text-xl font-black text-white mt-0.5">
@@ -704,6 +804,16 @@ export default function Home() {
       />
 
       {/* Modals */}
+      <LocationPickerModal
+        isOpen={isLocationPickerOpen}
+        locations={locations}
+        selectedLocation={selectedLocation}
+        onClose={() => setIsLocationPickerOpen(false)}
+        onSelectLocation={handleSelectLocation}
+        onAddLocation={handleAddLocation}
+        onDeleteLocation={handleDeleteLocation}
+      />
+
       <RoutineManagerModal
         isOpen={isRoutineManagerOpen}
         routines={routines}

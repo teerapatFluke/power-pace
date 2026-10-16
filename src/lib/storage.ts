@@ -1,12 +1,53 @@
-import { Exercise, WorkoutSession } from '@/types/workout';
+import { Exercise, WorkoutSession, GymLocation } from '@/types/workout';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { DEFAULT_EXERCISES } from './defaultExercises';
 import { WORKOUT_ROUTINES, RoutinePreset } from './workoutRoutines';
+import { DEFAULT_LOCATIONS } from './defaultLocations';
 
 const ACTIVE_WORKOUT_KEY = 'power_pace_active_workout';
 const HISTORY_KEY = 'power_pace_workout_history';
 const CUSTOM_EXERCISES_KEY = 'power_pace_custom_exercises';
 const ROUTINES_KEY = 'power_pace_routines';
+const LOCATIONS_KEY = 'power_pace_gym_locations';
+const SELECTED_LOCATION_KEY = 'power_pace_selected_location';
+
+export function getLocalLocations(): GymLocation[] {
+  if (typeof window === 'undefined') return DEFAULT_LOCATIONS;
+  const raw = localStorage.getItem(LOCATIONS_KEY);
+  if (!raw) return DEFAULT_LOCATIONS;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return DEFAULT_LOCATIONS;
+  }
+}
+
+export function saveLocalLocations(locations: GymLocation[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(LOCATIONS_KEY, JSON.stringify(locations));
+}
+
+export function getSelectedLocation(): GymLocation {
+  const list = getLocalLocations();
+  if (typeof window === 'undefined') return list[0] || DEFAULT_LOCATIONS[0];
+  const raw = localStorage.getItem(SELECTED_LOCATION_KEY);
+  if (raw) {
+    try {
+      const loc = JSON.parse(raw);
+      const exists = list.find((l) => l.id === loc.id);
+      if (exists) return exists;
+    } catch {
+      // ignore
+    }
+  }
+  return list[0] || DEFAULT_LOCATIONS[0];
+}
+
+export function setSelectedLocation(location: GymLocation): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(SELECTED_LOCATION_KEY, JSON.stringify(location));
+}
+
 
 export function getLocalRoutines(): RoutinePreset[] {
   if (typeof window === 'undefined') return WORKOUT_ROUTINES;
@@ -150,24 +191,60 @@ export function saveLocalCustomExercise(exercise: Exercise) {
   localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(custom));
 }
 
-// Find previous performance for an exercise
-export function findLastPerformance(exerciseId: string, exerciseName: string) {
+// Find previous performance for an exercise (prioritizing the current gym location)
+export function findLastPerformance(
+  exerciseId: string,
+  exerciseName: string,
+  currentLocationId?: string
+) {
   const history = getLocalWorkoutHistory();
+
+  // 1. Try finding in the CURRENT gym location first
+  if (currentLocationId) {
+    for (const session of history) {
+      if (session.location_id === currentLocationId) {
+        const match = session.exercises.find(
+          (e) => e.exercise_id === exerciseId || e.exercise_name === exerciseName
+        );
+        if (match && match.sets.length > 0) {
+          const completedSets = match.sets.filter((s) => s.is_completed);
+          const targetSet =
+            completedSets.length > 0
+              ? completedSets[completedSets.length - 1]
+              : match.sets[0];
+          return {
+            weight_or_pin: targetSet.weight_or_pin,
+            reps: targetSet.reps,
+            unit_type: match.unit_type,
+            location_name: session.location_name,
+            is_from_current_location: true,
+          };
+        }
+      }
+    }
+  }
+
+  // 2. If not found in current gym, look in other gyms (so user still has a baseline reference)
   for (const session of history) {
     const match = session.exercises.find(
       (e) => e.exercise_id === exerciseId || e.exercise_name === exerciseName
     );
     if (match && match.sets.length > 0) {
-      // Find the heaviest completed set or last set
       const completedSets = match.sets.filter((s) => s.is_completed);
-      const targetSet = completedSets.length > 0 ? completedSets[completedSets.length - 1] : match.sets[0];
+      const targetSet =
+        completedSets.length > 0
+          ? completedSets[completedSets.length - 1]
+          : match.sets[0];
       return {
         weight_or_pin: targetSet.weight_or_pin,
         reps: targetSet.reps,
         unit_type: match.unit_type,
+        location_name: session.location_name,
+        is_from_current_location: false,
       };
     }
   }
+
   return null;
 }
 
@@ -178,12 +255,13 @@ export async function syncWorkoutToSupabase(workout: WorkoutSession): Promise<{ 
   }
 
   try {
-    // 1. Insert or Upsert Workout
+    // 1. Insert or Upsert Workout (including location)
     const { error: wError } = await supabase.from('workouts').upsert({
       id: workout.id,
       title: workout.title,
       date: workout.date,
       duration_seconds: workout.duration_seconds,
+      location_name: workout.location_name || null,
     });
 
     if (wError) throw wError;

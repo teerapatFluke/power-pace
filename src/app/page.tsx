@@ -17,6 +17,7 @@ import {
   getLocalWorkoutHistory,
   saveLocalWorkoutHistory,
   getLocalExercises,
+  fetchExercisesFromSupabase,
   saveLocalCustomExercise,
   findLastPerformance,
   syncWorkoutToSupabase,
@@ -119,6 +120,12 @@ export default function Home() {
           'power_pace_workout_history',
           JSON.stringify(remoteHistory)
         );
+      }
+    });
+
+    fetchExercisesFromSupabase().then((remoteExercises) => {
+      if (remoteExercises && remoteExercises.length > 0) {
+        setExercises(remoteExercises);
       }
     });
   }, []);

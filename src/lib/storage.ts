@@ -169,8 +169,19 @@ export function saveLocalWorkoutHistory(workout: WorkoutSession) {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
 }
 
+const EXERCISES_CACHE_KEY = 'power_pace_exercises_cache';
+
 export function getLocalExercises(): Exercise[] {
   if (typeof window === 'undefined') return DEFAULT_EXERCISES;
+  const cached = localStorage.getItem(EXERCISES_CACHE_KEY);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {
+      // ignore
+    }
+  }
   const raw = localStorage.getItem(CUSTOM_EXERCISES_KEY);
   let custom: Exercise[] = [];
   if (raw) {
@@ -183,12 +194,60 @@ export function getLocalExercises(): Exercise[] {
   return [...DEFAULT_EXERCISES, ...custom];
 }
 
-export function saveLocalCustomExercise(exercise: Exercise) {
+export function saveLocalExercisesCache(exercises: Exercise[]) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(EXERCISES_CACHE_KEY, JSON.stringify(exercises));
+}
+
+export async function fetchExercisesFromSupabase(): Promise<Exercise[] | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('exercises')
+      .select('id, name, category, unit_type')
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.warn('Could not fetch exercises from Supabase:', error.message);
+      return null;
+    }
+
+    if (data && data.length > 0) {
+      const mapped: Exercise[] = data.map((e) => ({
+        id: e.id,
+        name: e.name,
+        category: e.category,
+        unit_type: e.unit_type,
+      }));
+      saveLocalExercisesCache(mapped);
+      return mapped;
+    }
+    return null;
+  } catch (e) {
+    console.warn('Supabase exercises fetch error:', e);
+    return null;
+  }
+}
+
+export async function saveLocalCustomExercise(exercise: Exercise) {
   if (typeof window === 'undefined') return;
   const raw = localStorage.getItem(CUSTOM_EXERCISES_KEY);
   let custom: Exercise[] = raw ? JSON.parse(raw) : [];
   custom = [...custom.filter((e) => e.id !== exercise.id), exercise];
   localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(custom));
+
+  // Also sync to Supabase exercises table
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('exercises').upsert({
+        name: exercise.name,
+        category: exercise.category,
+        unit_type: exercise.unit_type,
+      });
+    } catch (e) {
+      console.warn('Could not sync custom exercise to Supabase:', e);
+    }
+  }
 }
 
 // Find previous performance for an exercise (STRICTLY isolated to the current gym location only)

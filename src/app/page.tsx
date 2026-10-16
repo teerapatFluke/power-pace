@@ -660,20 +660,8 @@ export default function Home() {
       {/* App bar */}
       <header className="sticky top-0 z-40 bg-concrete/95 backdrop-blur-sm border-b border-rule">
         <div className="max-w-xl mx-auto px-4 flex items-center justify-between h-14">
-          <div className="flex items-baseline gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
             <h1 className="text-xl font-bold tracking-tight">PowerPace</h1>
-            <button
-              type="button"
-              onClick={() => setIsSqlModalOpen(true)}
-              className="text-xs text-mute hover:text-ink flex items-center gap-1.5 truncate"
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  supabaseStatus.connected ? 'bg-plate-green' : 'bg-plate-yellow'
-                }`}
-              />
-              {supabaseStatus.connected ? 'ซิงก์แล้ว' : 'ตั้งค่าคลาวด์'}
-            </button>
           </div>
 
           <nav className="flex items-center -mr-2 gap-0.5">

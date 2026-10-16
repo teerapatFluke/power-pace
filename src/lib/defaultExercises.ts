@@ -87,6 +87,8 @@ export const DEFAULT_EXERCISES: Exercise[] = [
   // แกนกลาง / ท้อง (CORE / ABS)
   // ==========================================
   { id: 'ab-crunch-machine', name: 'Ab Crunch Machine (เครื่องซิทอัพหน้าท้อง)', category: 'Core', unit_type: 'pin' },
+  { id: 'sit-up', name: 'Sit-up / Crunches (ซิทอัพหน้าท้อง)', category: 'Core', unit_type: 'bodyweight' },
+  { id: 'decline-sit-up', name: 'Decline Sit-up (ซิทอัพม้านั่งลาดเอียง)', category: 'Core', unit_type: 'bodyweight' },
   { id: 'cable-crunch', name: 'Cable Kneeling Crunch (เคเบิลคุกเข่าซิทอัพ)', category: 'Core', unit_type: 'pin' },
   { id: 'hanging-leg-raise', name: 'Hanging Leg Raise (โหนบาร์ยกขา)', category: 'Core', unit_type: 'bodyweight' },
   { id: 'plank', name: 'Plank (แพลงก์จับเวลา)', category: 'Core', unit_type: 'bodyweight' },

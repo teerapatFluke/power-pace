@@ -165,6 +165,8 @@ INSERT INTO exercises (name, category, unit_type) VALUES
 
   -- แกนกลาง / ท้อง (Core / Abs)
   ('Ab Crunch Machine (เครื่องซิทอัพหน้าท้อง)', 'Core', 'pin'),
+  ('Sit-up / Crunches (ซิทอัพหน้าท้อง)', 'Core', 'bodyweight'),
+  ('Decline Sit-up (ซิทอัพม้านั่งลาดเอียง)', 'Core', 'bodyweight'),
   ('Cable Kneeling Crunch (เคเบิลคุกเข่าซิทอัพ)', 'Core', 'pin'),
   ('Hanging Leg Raise (โหนบาร์ยกขา)', 'Core', 'bodyweight'),
   ('Plank (แพลงก์จับเวลา)', 'Core', 'bodyweight'),

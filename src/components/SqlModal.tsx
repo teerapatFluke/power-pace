@@ -21,8 +21,18 @@ CREATE TABLE IF NOT EXISTS exercises (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS allowed_emails (
+  email TEXT PRIMARY KEY,
+  note TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE allowed_emails ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow read allowed_emails" ON allowed_emails FOR SELECT USING (true);
+
 CREATE TABLE IF NOT EXISTS workouts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL DEFAULT 'Workout',
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   duration_seconds INT DEFAULT 0,

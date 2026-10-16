@@ -298,13 +298,22 @@ export async function syncWorkoutToSupabase(workout: WorkoutSession): Promise<{ 
   }
 
   try {
-    // 1. Insert or Upsert Workout (including location)
+    let userId: string | null = null;
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user) userId = userData.user.id;
+    } catch {
+      // not logged in
+    }
+
+    // 1. Insert or Upsert Workout (including location and user_id)
     const { error: wError } = await supabase.from('workouts').upsert({
       id: workout.id,
       title: workout.title,
       date: workout.date,
       duration_seconds: workout.duration_seconds,
       location_name: workout.location_name || null,
+      user_id: userId,
     });
 
     if (wError) throw wError;
@@ -429,3 +438,25 @@ export async function testSupabaseConnection(): Promise<{ connected: boolean; me
     return { connected: false, message: err instanceof Error ? err.message : 'เชื่อมต่อไม่สำเร็จ' };
   }
 }
+
+export async function getCurrentUser() {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user;
+  } catch {
+    return null;
+  }
+}
+
+export async function signOutUser(): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    await supabase.auth.signOut();
+    return true;
+  } catch (err) {
+    console.warn('Sign out error:', err);
+    return false;
+  }
+}
+

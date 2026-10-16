@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, ChevronDown, MapPin, Timer } from 'lucide-react';
+import { Plus, ChevronDown, MapPin, Timer, LogIn, User as UserIcon } from 'lucide-react';
 import {
   Exercise,
   WorkoutSession,
@@ -11,6 +11,7 @@ import {
 } from '@/types/workout';
 import { RoutinePreset } from '@/lib/workoutRoutines';
 import { DEFAULT_LOCATIONS } from '@/lib/defaultLocations';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
   getLocalActiveWorkout,
   setLocalActiveWorkout,
@@ -32,6 +33,8 @@ import {
   saveLocalLocations,
   getSelectedLocation,
   setSelectedLocation,
+  getCurrentUser,
+  signOutUser,
 } from '@/lib/storage';
 import ExerciseCard from '@/components/ExerciseCard';
 import AddExerciseModal from '@/components/AddExerciseModal';
@@ -41,6 +44,7 @@ import HistoryModal from '@/components/HistoryModal';
 import SqlModal from '@/components/SqlModal';
 import RoutineManagerModal from '@/components/RoutineManagerModal';
 import LocationPickerModal from '@/components/LocationPickerModal';
+import AuthModal from '@/components/AuthModal';
 
 export default function Home() {
   // App State
@@ -59,6 +63,8 @@ export default function Home() {
   const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
   const [isRoutineManagerOpen, setIsRoutineManagerOpen] = useState(false);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ id: string; email?: string } | null>(null);
   // undefined = auto (first unfinished exercise), null = all collapsed
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null | undefined>(
     undefined
@@ -128,6 +134,37 @@ export default function Home() {
         setExercises(remoteExercises);
       }
     });
+
+    // Check initial Auth session
+    getCurrentUser().then((u) => {
+      if (u) setCurrentUser({ id: u.id, email: u.email });
+    });
+
+    // Listen to Auth state changes in real time
+    if (isSupabaseConfigured && supabase) {
+      const { data: authListener } = supabase.auth.onAuthStateChange(
+        (_event, session) => {
+          if (session?.user) {
+            setCurrentUser({ id: session.user.id, email: session.user.email });
+            fetchWorkoutHistoryFromSupabase().then((remoteHistory) => {
+              if (remoteHistory && remoteHistory.length > 0) {
+                setHistory(remoteHistory);
+                localStorage.setItem(
+                  'power_pace_workout_history',
+                  JSON.stringify(remoteHistory)
+                );
+              }
+            });
+          } else {
+            setCurrentUser(null);
+          }
+        }
+      );
+
+      return () => {
+        authListener.subscription.unsubscribe();
+      };
+    }
   }, []);
 
   // Sync active workout to local storage
@@ -639,21 +676,46 @@ export default function Home() {
             </button>
           </div>
 
-          <nav className="flex items-center -mr-2">
+          <nav className="flex items-center -mr-2 gap-0.5">
             <button
               type="button"
               onClick={() => setIsRoutineManagerOpen(true)}
-              className="px-3 py-2 rounded-md text-sm font-medium text-ink hover:bg-ink/5"
+              className="px-2.5 py-1.5 rounded-md text-sm font-medium text-ink hover:bg-ink/5"
             >
               ตาราง
             </button>
             <button
               type="button"
               onClick={() => setIsHistoryOpen(true)}
-              className="px-3 py-2 rounded-md text-sm font-medium text-ink hover:bg-ink/5"
+              className="px-2.5 py-1.5 rounded-md text-sm font-medium text-ink hover:bg-ink/5"
             >
               ประวัติ
             </button>
+
+            {currentUser ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(`คุณต้องการออกจากระบบ (${currentUser.email}) หรือไม่?`)) {
+                    signOutUser().then(() => setCurrentUser(null));
+                  }
+                }}
+                className="ml-1 px-2 py-1.5 rounded-md text-xs font-semibold bg-well hover:bg-rule/70 text-ink flex items-center gap-1.5 max-w-[125px] truncate transition-colors"
+                title={`ล็อกอินด้วย: ${currentUser.email} (แตะเพื่อออกจากระบบ)`}
+              >
+                <UserIcon className="w-3.5 h-3.5 text-plate-blue shrink-0" />
+                <span className="truncate">{currentUser.email?.split('@')[0]}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="ml-1 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-plate-blue hover:bg-plate-blue-dark text-white flex items-center gap-1 transition-colors shadow-xs"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>เข้าสู่ระบบ</span>
+              </button>
+            )}
           </nav>
         </div>
       </header>
@@ -939,6 +1001,14 @@ export default function Home() {
       <SqlModal
         isOpen={isSqlModalOpen}
         onClose={() => setIsSqlModalOpen(false)}
+      />
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={(userEmail) => {
+          console.log('Successfully logged in as:', userEmail);
+        }}
       />
     </main>
   );

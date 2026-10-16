@@ -1,0 +1,16 @@
+{
+  "name": "PowerPace Workout Tracker",
+  "short_name": "PowerPace",
+  "description": "บันทึกน้ำหนักเวทเทรนนิ่ง Machine & Free Weight",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090c10",
+  "theme_color": "#090c10",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

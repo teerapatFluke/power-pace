@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Check, Trash2, Plus, Minus } from 'lucide-react';
+import { Check, X, Plus, Minus } from 'lucide-react';
 import { ExerciseSet, UnitType } from '@/types/workout';
 
 interface SetRowProps {
@@ -31,32 +31,38 @@ export default function SetRow({
     onUpdate({ reps: nextReps });
   };
 
+  const stepBtn =
+    'w-7 h-9 shrink-0 flex items-center justify-center rounded-md text-mute hover:text-ink hover:bg-well active:bg-rule transition-colors';
+
   return (
     <div
-      className={`grid grid-cols-12 gap-2 items-center py-2 px-3 rounded-xl transition-all duration-200 border ${
-        set.is_completed
-          ? 'bg-emerald-950/25 border-emerald-500/20'
-          : 'bg-[#0f141d]/70 hover:bg-[#151c28] border-white/5'
+      className={`flex gap-1.5 items-center py-2 px-1 transition-colors ${
+        set.is_completed ? 'bg-plate-green/[0.07]' : ''
       }`}
     >
       {/* Set Number */}
-      <div className="col-span-1 text-center font-bold text-sm text-gray-400">
+      <div
+        className={`w-6 shrink-0 text-center num text-lg font-semibold ${
+          set.is_completed ? 'text-plate-green' : 'text-faint'
+        }`}
+      >
         {set.set_number}
       </div>
 
       {/* Weight / Pin Stepper Column */}
-      <div className="col-span-5 flex items-center justify-between bg-black/40 rounded-lg p-1 border border-white/5">
+      <div className="flex-[5] min-w-0 flex items-center justify-between">
         <button
           type="button"
           onClick={() => handleWeightChange(-stepWeight)}
-          className="w-7 h-7 flex items-center justify-center rounded bg-gray-800/80 hover:bg-gray-700 active:scale-90 text-gray-300 font-bold transition"
+          className={stepBtn}
+          aria-label="ลดน้ำหนัก"
         >
-          <Minus className="w-3.5 h-3.5" />
+          <Minus className="w-4 h-4" />
         </button>
 
-        <div className="flex flex-col items-center">
-          <input
+        <input
             type="number"
+            inputMode="decimal"
             step={stepWeight}
             value={set.weight_or_pin || ''}
             onChange={(e) =>
@@ -64,66 +70,66 @@ export default function SetRow({
                 weight_or_pin: Math.max(0, parseFloat(e.target.value) || 0),
               })
             }
-            className="w-14 text-center bg-transparent font-black text-base text-white focus:outline-none focus:text-emerald-400"
+            className="num w-full min-w-0 text-center bg-transparent text-2xl font-semibold text-ink focus:outline-none focus:text-plate-blue"
             placeholder="0"
+            aria-label={unitType === 'pin' ? 'แผ่นที่' : `น้ำหนัก ${unitType}`}
           />
-          <span className="text-[10px] text-gray-400 -mt-1 font-medium">
-            {unitType === 'pin' ? 'แผ่นที่' : unitType === 'lbs' ? 'lbs' : 'kg'}
-          </span>
-        </div>
 
         <button
           type="button"
           onClick={() => handleWeightChange(stepWeight)}
-          className="w-7 h-7 flex items-center justify-center rounded bg-gray-800/80 hover:bg-gray-700 active:scale-90 text-emerald-400 font-bold transition"
+          className={stepBtn}
+          aria-label="เพิ่มน้ำหนัก"
         >
-          <Plus className="w-3.5 h-3.5" />
+          <Plus className="w-4 h-4" />
         </button>
       </div>
 
       {/* Reps Stepper Column */}
-      <div className="col-span-4 flex items-center justify-between bg-black/40 rounded-lg p-1 border border-white/5">
+      <div className="flex-[4] min-w-0 flex items-center justify-between">
         <button
           type="button"
           onClick={() => handleRepsChange(-1)}
-          className="w-7 h-7 flex items-center justify-center rounded bg-gray-800/80 hover:bg-gray-700 active:scale-90 text-gray-300 font-bold transition"
+          className={stepBtn}
+          aria-label="ลดจำนวนครั้ง"
         >
-          <Minus className="w-3.5 h-3.5" />
+          <Minus className="w-4 h-4" />
         </button>
 
-        <div className="flex flex-col items-center">
-          <input
+        <input
             type="number"
+            inputMode="numeric"
             value={set.reps || ''}
             onChange={(e) =>
               onUpdate({ reps: Math.max(0, parseInt(e.target.value, 10) || 0) })
             }
-            className="w-10 text-center bg-transparent font-black text-base text-white focus:outline-none focus:text-emerald-400"
+            className="num w-full min-w-0 text-center bg-transparent text-2xl font-semibold text-ink focus:outline-none focus:text-plate-blue"
             placeholder="0"
+            aria-label="จำนวนครั้ง"
           />
-          <span className="text-[10px] text-gray-400 -mt-1 font-medium">ครั้ง</span>
-        </div>
 
         <button
           type="button"
           onClick={() => handleRepsChange(1)}
-          className="w-7 h-7 flex items-center justify-center rounded bg-gray-800/80 hover:bg-gray-700 active:scale-90 text-emerald-400 font-bold transition"
+          className={stepBtn}
+          aria-label="เพิ่มจำนวนครั้ง"
         >
-          <Plus className="w-3.5 h-3.5" />
+          <Plus className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Checkbox / Done Action */}
-      <div className="col-span-2 flex items-center justify-end space-x-1.5">
+      {/* Done / Delete */}
+      <div className="w-[66px] shrink-0 flex items-center justify-end gap-0.5">
         <button
           type="button"
           onClick={onToggleComplete}
-          className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold transition-all duration-200 active:scale-90 ${
+          className={`w-10 h-10 rounded-md flex items-center justify-center transition-colors ${
             set.is_completed
-              ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/30'
-              : 'bg-gray-800/70 border border-white/10 text-gray-400 hover:text-white hover:border-emerald-500/50'
+              ? 'bg-plate-green text-white'
+              : 'border-2 border-rule text-transparent hover:border-plate-green hover:text-plate-green/50'
           }`}
-          title={set.is_completed ? 'เสร็จแล้ว (แตะเพื่อยกเลิก)' : 'แตะเมื่อเล่นเซ็ตนี้เสร็จ'}
+          aria-pressed={set.is_completed}
+          aria-label={set.is_completed ? 'เล่นเซ็ตนี้แล้ว แตะเพื่อยกเลิก' : 'แตะเมื่อเล่นเซ็ตนี้เสร็จ'}
         >
           <Check className="w-5 h-5 stroke-[3]" />
         </button>
@@ -131,10 +137,10 @@ export default function SetRow({
         <button
           type="button"
           onClick={onDelete}
-          className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 active:scale-90 transition"
-          title="ลบเซ็ต"
+          className="p-1 rounded-md text-faint hover:text-plate-red hover:bg-plate-red/10 transition-colors"
+          aria-label="ลบเซ็ต"
         >
-          <Trash2 className="w-3.5 h-3.5" />
+          <X className="w-4 h-4" />
         </button>
       </div>
     </div>

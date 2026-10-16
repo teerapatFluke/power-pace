@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.claude/handoff_current.md
+.claude/handoff_history/
+.claude/handoff_backups/

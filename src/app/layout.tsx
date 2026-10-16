@@ -1,5 +1,20 @@
 import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Sans_Thai, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
+
+const plex = IBM_Plex_Sans_Thai({
+  weight: ["400", "500", "600", "700"],
+  subsets: ["thai", "latin"],
+  variable: "--font-plex",
+  display: "swap",
+});
+
+const barlow = Barlow_Condensed({
+  weight: ["500", "600", "700"],
+  subsets: ["latin"],
+  variable: "--font-barlow",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "PowerPace - สมุดบันทึกเวทเทรนนิ่ง",
@@ -7,7 +22,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "PowerPace",
   },
 };
@@ -17,7 +32,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#090c10",
+  themeColor: "#e4e4df",
 };
 
 export default function RootLayout({
@@ -26,8 +41,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="th" className="h-full bg-[#090c10] text-[#f0f3f6]">
-      <body className="min-h-full flex flex-col font-sans antialiased bg-[#090c10] text-[#f0f3f6]">
+    <html lang="th" className={`h-full ${plex.variable} ${barlow.variable}`}>
+      <body className="min-h-full flex flex-col font-sans bg-concrete text-ink">
         {children}
       </body>
     </html>

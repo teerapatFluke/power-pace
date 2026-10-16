@@ -1,26 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Dumbbell,
-  Play,
-  CheckCircle2,
-  Plus,
-  History,
-  Timer,
-  Layers,
-  Sparkles,
-  Database,
-  Calendar,
-  RotateCcw,
-  Activity,
-  Flame,
-  Settings,
-  ChevronRight,
-  ChevronDown,
-  Edit3,
-  MapPin,
-} from 'lucide-react';
+import { Plus, ChevronDown, MapPin, Timer } from 'lucide-react';
 import {
   Exercise,
   WorkoutSession,
@@ -77,6 +58,10 @@ export default function Home() {
   const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
   const [isRoutineManagerOpen, setIsRoutineManagerOpen] = useState(false);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+  // undefined = auto (first unfinished exercise), null = all collapsed
+  const [expandedExerciseId, setExpandedExerciseId] = useState<string | null | undefined>(
+    undefined
+  );
   const [finishedWorkout, setFinishedWorkout] = useState<WorkoutSession | null>(null);
   const [lastSyncSuccess, setLastSyncSuccess] = useState(false);
 
@@ -229,6 +214,7 @@ export default function Home() {
   // Handle delete location
   const handleDeleteLocation = (locId: string) => {
     const updated = locations.filter((l) => l.id !== locId);
+    if (updated.length === 0) return;
     setLocations(updated);
     saveLocalLocations(updated);
     if (selectedLocation.id === locId && updated.length > 0) {
@@ -306,6 +292,7 @@ export default function Home() {
       is_completed: false,
     };
 
+    setExpandedExerciseId(undefined);
     setActiveWorkout(newSession);
     setLocalActiveWorkout(newSession);
   };
@@ -362,6 +349,7 @@ export default function Home() {
       ],
     };
 
+    setExpandedExerciseId(newWorkoutExercise.id);
     setActiveWorkout((prev) => {
       if (!prev) {
         return {
@@ -469,7 +457,10 @@ export default function Home() {
     setId: string
   ) => {
     if (!activeWorkout) return;
-    let shouldStartTimer = false;
+    const target = activeWorkout.exercises
+      .find((ex) => ex.id === workoutExerciseId)
+      ?.sets.find((s) => s.id === setId);
+    const shouldStartTimer = Boolean(target && !target.is_completed);
 
     setActiveWorkout((prev) => {
       if (!prev) return null;
@@ -477,9 +468,7 @@ export default function Home() {
         if (ex.id !== workoutExerciseId) return ex;
         const updatedSets = ex.sets.map((s) => {
           if (s.id === setId) {
-            const nextStatus = !s.is_completed;
-            if (nextStatus) shouldStartTimer = true;
-            return { ...s, is_completed: nextStatus };
+            return { ...s, is_completed: !s.is_completed };
           }
           return s;
         });
@@ -581,236 +570,175 @@ export default function Home() {
     return `${mins}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const completedSets = activeWorkout
+    ? activeWorkout.exercises.reduce(
+        (acc, ex) => acc + ex.sets.filter((s) => s.is_completed).length,
+        0
+      )
+    : 0;
+
+  const autoExpandedId =
+    activeWorkout?.exercises.find(
+      (ex) => ex.sets.length === 0 || ex.sets.some((s) => !s.is_completed)
+    )?.id ?? null;
+  const openExerciseId =
+    expandedExerciseId === undefined ? autoExpandedId : expandedExerciseId;
+
   return (
-    <main className="min-h-screen bg-[#090c10] text-[#f0f3f6] pb-28">
-      {/* Top Header / App Bar */}
-      <header className="sticky top-0 z-40 bg-[#090c10]/95 backdrop-blur-md border-b border-white/5 px-4 py-3">
-        <div className="max-w-xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-emerald-400 flex items-center justify-center text-black font-black shadow-lg shadow-emerald-500/20">
-              <Dumbbell className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-base font-black tracking-tight text-white flex items-center gap-1.5">
-                PowerPace
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  Gym Tracker
-                </span>
-              </h1>
-              <button
-                type="button"
-                onClick={() => setIsSqlModalOpen(true)}
-                className="text-[11px] text-gray-400 hover:text-emerald-400 flex items-center gap-1 transition text-left"
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    supabaseStatus.connected ? 'bg-emerald-400' : 'bg-amber-400'
-                  }`}
-                />
-                <span className="truncate max-w-[170px] sm:max-w-none">
-                  {supabaseStatus.connected ? 'Supabase Sync พร้อม' : 'Cloud Setup (SQL)'}
-                </span>
-              </button>
-            </div>
+    <main className="min-h-screen bg-concrete text-ink pb-32">
+      {/* App bar */}
+      <header className="sticky top-0 z-40 bg-concrete/95 backdrop-blur-sm border-b border-rule">
+        <div className="max-w-xl mx-auto px-4 flex items-center justify-between h-14">
+          <div className="flex items-baseline gap-3 min-w-0">
+            <h1 className="text-xl font-bold tracking-tight">PowerPace</h1>
+            <button
+              type="button"
+              onClick={() => setIsSqlModalOpen(true)}
+              className="text-xs text-mute hover:text-ink flex items-center gap-1.5 truncate"
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  supabaseStatus.connected ? 'bg-plate-green' : 'bg-plate-yellow'
+                }`}
+              />
+              {supabaseStatus.connected ? 'ซิงก์แล้ว' : 'ตั้งค่าคลาวด์'}
+            </button>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <nav className="flex items-center -mr-2">
             <button
               type="button"
               onClick={() => setIsRoutineManagerOpen(true)}
-              className="p-2.5 rounded-xl bg-[#121721] hover:bg-[#1a2130] border border-white/5 text-gray-300 hover:text-white transition flex items-center gap-1 text-xs font-semibold"
-              title="จัดการตารางเล่น"
+              className="px-3 py-2 rounded-md text-sm font-medium text-ink hover:bg-ink/5"
             >
-              <Calendar className="w-4 h-4 text-emerald-400" />
-              <span className="hidden sm:inline">ตารางเล่น</span>
+              ตาราง
             </button>
-
             <button
               type="button"
               onClick={() => setIsHistoryOpen(true)}
-              className="p-2.5 rounded-xl bg-[#121721] hover:bg-[#1a2130] border border-white/5 text-gray-300 hover:text-white transition flex items-center gap-1 text-xs font-semibold"
-              title="ประวัติการเล่น"
+              className="px-3 py-2 rounded-md text-sm font-medium text-ink hover:bg-ink/5"
             >
-              <History className="w-4 h-4 text-emerald-400" />
-              <span className="hidden sm:inline">ประวัติ</span>
+              ประวัติ
             </button>
-          </div>
-        </div>
-
-        {/* Location Switcher Sub-header bar */}
-        <div className="max-w-xl mx-auto pt-2.5 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setIsLocationPickerOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#161d2a] hover:bg-[#1c2637] border border-white/10 text-xs font-bold text-white transition active:scale-95 shadow-sm"
-          >
-            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-gray-400 font-normal">เล่นที่:</span>
-            <span className="text-emerald-300 truncate max-w-[170px] sm:max-w-[220px]">
-              {selectedLocation.name}
-            </span>
-            <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-0.5" />
-          </button>
-
-          <span className="text-[11px] text-gray-500 font-medium hidden sm:inline">
-            ประวัติน้ำหนักแผ่นจะแยกตามสถานที่นี้
-          </span>
+          </nav>
         </div>
       </header>
 
-      {/* Main Content Area */}
       <div className="max-w-xl mx-auto px-4 pt-4 space-y-4">
-        {/* Active Session Status Card */}
-        {activeWorkout ? (
-          <div className="bg-[#121721] rounded-2xl p-4 border border-emerald-500/30 shadow-xl glow-lime">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
-                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
-                    กำลังฝึกซ้อมอยู่ @ {activeWorkout.location_name || selectedLocation.name}
-                  </span>
-                </div>
-                <h2 className="text-xl font-black text-white mt-0.5">
-                  {activeWorkout.title}
-                </h2>
-              </div>
+        {/* Location */}
+        <button
+          type="button"
+          onClick={() => setIsLocationPickerOpen(true)}
+          className="flex items-center gap-1.5 text-sm text-mute hover:text-ink -ml-0.5"
+        >
+          <MapPin className="w-4 h-4" />
+          <span>เล่นที่</span>
+          <span className="font-semibold text-ink truncate max-w-[220px]">
+            {selectedLocation.name}
+          </span>
+          <ChevronDown className="w-4 h-4" />
+        </button>
 
-              {/* Timer & Discard button */}
-              <div className="text-right">
-                <div className="text-xs text-gray-400 font-medium">เวลาที่ผ่านไป</div>
-                <div className="text-2xl font-black font-mono text-emerald-400">
-                  {formatWorkoutDuration(activeWorkout.duration_seconds)}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDiscardWorkout}
-                  className="text-[11px] text-red-400/70 hover:text-red-400 hover:underline mt-0.5"
-                >
-                  ยกเลิกเซสชัน
-                </button>
+        {activeWorkout ? (
+          /* Active session summary */
+          <div className="pb-1">
+            <div className="flex items-end justify-between gap-4">
+              <h2 className="text-2xl font-bold leading-tight min-w-0">
+                {activeWorkout.title}
+              </h2>
+              <div
+                className="num text-5xl font-bold leading-none text-ink"
+                aria-label="เวลาที่เล่นไป"
+              >
+                {formatWorkoutDuration(activeWorkout.duration_seconds)}
               </div>
             </div>
 
-            {/* Quick Stats Bar */}
-            <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-white/5 text-center">
-              <div>
-                <div className="text-[11px] text-gray-400">จำนวนท่า</div>
-                <div className="text-sm font-bold text-white">
-                  {activeWorkout.exercises.length} ท่า
-                </div>
-              </div>
-              <div>
-                <div className="text-[11px] text-gray-400">เซ็ตที่สำเร็จ</div>
-                <div className="text-sm font-bold text-emerald-400">
-                  {activeWorkout.exercises.reduce(
-                    (acc, ex) => acc + ex.sets.filter((s) => s.is_completed).length,
-                    0
-                  )}{' '}
-                  เซ็ต
-                </div>
-              </div>
-              <div>
-                <div className="text-[11px] text-gray-400">พักระหว่างเซ็ต</div>
-                <button
-                  type="button"
-                  onClick={() => setIsRestTimerActive(true)}
-                  className="text-xs font-bold text-orange-400 hover:underline flex items-center justify-center gap-1 mx-auto"
-                >
-                  <Timer className="w-3.5 h-3.5" /> พัก 90s
-                </button>
-              </div>
+            <div className="mt-3 flex items-center gap-4 text-sm text-mute">
+              <span>
+                <span className="num text-lg font-semibold text-ink">
+                  {activeWorkout.exercises.length}
+                </span>{' '}
+                ท่า
+              </span>
+              <span>
+                <span className="num text-lg font-semibold text-ink">{completedSets}</span>{' '}
+                เซ็ตที่เล่นแล้ว
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsRestTimerActive(true)}
+                className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rule text-ink font-medium hover:bg-paper"
+              >
+                <Timer className="w-4 h-4" />
+                พัก 90 วิ
+              </button>
             </div>
           </div>
         ) : (
-          /* Empty / Start Workout Hero */
-          <div className="bg-[#121721] rounded-3xl p-5 border border-white/5 text-center space-y-4 shadow-xl">
-            <div className="flex items-center justify-between pb-2 border-b border-white/5">
-              <div className="flex items-center gap-2">
-                <Flame className="w-5 h-5 text-emerald-400 animate-pulse" />
-                <h2 className="text-base font-black text-white">
-                  ตารางฝึกซ้อมประจำสัปดาห์
-                </h2>
-              </div>
+          /* Weekly routine list */
+          <div>
+            <div className="flex items-baseline justify-between mb-2">
+              <h2 className="text-2xl font-bold">วันนี้เล่นอะไร</h2>
               <button
                 type="button"
                 onClick={() => setIsRoutineManagerOpen(true)}
-                className="text-xs font-bold text-emerald-400 hover:underline flex items-center gap-1"
+                className="text-sm font-medium text-plate-blue hover:underline underline-offset-2"
               >
-                <Edit3 className="w-3.5 h-3.5" />
                 แก้ไขตาราง
               </button>
             </div>
 
-            {/* Preset Routine Cards List */}
-            <div className="space-y-2 text-left">
+            <ul className="bg-paper rounded-lg border border-rule divide-y divide-rule">
               {routines.map((routine) => (
-                <div
-                  key={routine.id}
-                  className="p-3 rounded-2xl bg-[#161d2a] hover:bg-[#1b2536] border border-white/5 transition flex items-center justify-between"
-                >
-                  <div className="flex-1 pr-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-sm text-white">
-                        {routine.name}
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 text-gray-400">
-                        {routine.exerciseIds.length} ท่า
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-400 truncate mt-0.5">
+                <li key={routine.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-ink">{routine.name}</div>
+                    <div className="text-sm text-mute truncate">
                       {routine.focus}
+                      <span className="text-faint">
+                        {', '}
+                        <span className="num">{routine.exerciseIds.length}</span> ท่า
+                      </span>
                     </div>
                   </div>
-
                   <button
                     type="button"
                     onClick={() => handleStartRoutine(routine)}
-                    className="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs flex items-center gap-1 shadow-md shadow-emerald-500/20 active:scale-95 transition"
+                    className="shrink-0 px-4 py-2 rounded-md bg-plate-blue hover:bg-plate-blue-dark text-white text-sm font-semibold transition-colors"
                   >
-                    <Play className="w-3.5 h-3.5 fill-black" />
-                    เริ่มเล่น
+                    เริ่ม
                   </button>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
 
-            {/* Custom Empty Workout button */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => handleStartWorkout('คอร์สอิสระ (Custom Workout)')}
-                className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-300 font-bold text-xs tracking-wide transition border border-white/5 flex items-center justify-center gap-1.5"
-              >
-                <Plus className="w-4 h-4 text-emerald-400" />
-                สร้างเซสชันเปล่า (เลือกท่าเอง)
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => handleStartWorkout('เลือกท่าเอง')}
+              className="mt-3 w-full py-3 rounded-md border border-dashed border-faint text-sm font-medium text-mute hover:text-ink hover:border-ink transition-colors"
+            >
+              เริ่มแบบเลือกท่าเอง
+            </button>
           </div>
         )}
 
-        {/* Exercises List in Active Workout */}
+        {/* Exercises in the active workout */}
         {activeWorkout && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {activeWorkout.exercises.length === 0 ? (
-              <div className="text-center py-10 bg-[#121721]/50 rounded-2xl border border-dashed border-white/10 p-6 space-y-3">
-                <Dumbbell className="w-10 h-10 mx-auto text-gray-600" />
-                <div className="text-sm font-bold text-gray-300">
-                  ยังไม่ได้เพิ่มท่าออกกำลังกาย
-                </div>
-                <p className="text-xs text-gray-500">
-                  กดปุ่ม "เพิ่มท่าออกกำลังกาย" เพื่อเลือกท่า Machine หรือ Free Weight
+              <div className="py-10 px-6 text-center rounded-lg border border-dashed border-faint">
+                <p className="font-semibold text-ink">ยังไม่มีท่าในรอบนี้</p>
+                <p className="mt-1 text-sm text-mute">
+                  เลือกท่าจากรายการ Machine หรือ Free Weight
                 </p>
                 <button
                   type="button"
                   onClick={() => setIsAddExerciseOpen(true)}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-500 text-black font-bold text-xs inline-flex items-center gap-1.5 shadow"
+                  className="mt-4 px-4 py-2.5 rounded-md bg-plate-blue hover:bg-plate-blue-dark text-white text-sm font-semibold inline-flex items-center gap-1.5"
                 >
                   <Plus className="w-4 h-4" />
-                  + เพิ่มท่าแรก
+                  เพิ่มท่าแรก
                 </button>
               </div>
             ) : (
@@ -840,6 +768,10 @@ export default function Home() {
                     }
                     onDeleteSet={(setId) => handleDeleteSet(ex.id, setId)}
                     onApplyProgressiveSet={() => handleApplyProgressiveSet(ex.id)}
+                    isExpanded={openExerciseId === ex.id}
+                    onToggleExpand={() =>
+                      setExpandedExerciseId(openExerciseId === ex.id ? null : ex.id)
+                    }
                     onApplyPreviousPerformance={() => {
                       if (!currentGymPerf) return;
                       const updatedSets = ex.sets.map((s) => {
@@ -859,33 +791,40 @@ export default function Home() {
               })
             )}
 
-            {/* Bottom buttons inside active workout */}
-            <div className="space-y-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsAddExerciseOpen(true)}
-                className="w-full py-3.5 rounded-2xl bg-[#161d2a] hover:bg-[#1c2637] border border-white/10 text-white font-bold text-xs flex items-center justify-center gap-2 active:scale-98 transition shadow"
-              >
-                <Plus className="w-4 h-4 text-emerald-400" />
-                + เพิ่มท่าออกกำลังกาย (Add Exercise)
-              </button>
+            {activeWorkout.exercises.length > 0 && (
+              <div className="space-y-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsAddExerciseOpen(true)}
+                  className="w-full py-3 rounded-md border border-dashed border-faint text-sm font-medium text-mute hover:text-ink hover:border-ink flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  เพิ่มท่า
+                </button>
 
-              {activeWorkout.exercises.length > 0 && (
                 <button
                   type="button"
                   onClick={handleFinishWorkout}
-                  className="w-full py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm tracking-wide shadow-xl shadow-emerald-500/25 transition active:scale-95 flex items-center justify-center gap-2"
+                  className="w-full py-4 rounded-md bg-plate-blue hover:bg-plate-blue-dark text-white text-base font-semibold transition-colors"
                 >
-                  <CheckCircle2 className="w-5 h-5" />
-                  บันทึกและจบการฝึกซ้อม (Finish Workout)
+                  จบและบันทึก
                 </button>
-              )}
+              </div>
+            )}
+
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={handleDiscardWorkout}
+                className="text-sm text-mute hover:text-plate-red underline-offset-2 hover:underline"
+              >
+                ยกเลิกรอบนี้
+              </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Floating Rest Timer Component */}
       <RestTimer
         isActive={isRestTimerActive}
         initialSeconds={restTimerSeconds}

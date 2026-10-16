@@ -1,18 +1,32 @@
 @import "tailwindcss";
 
-:root {
-  --background: #090c10;
-  --foreground: #f0f3f6;
-  --card: #121721;
-  --card-border: #1f2737;
-  --accent-lime: #22c55e;
-  --accent-orange: #f97316;
+/*
+  Palette borrowed from the gym floor: concrete, logbook paper, ink,
+  and competition bumper-plate colors. Each plate color has one job:
+  blue = primary action, green = done, red = remove, yellow = rest.
+*/
+@theme {
+  --color-concrete: #e4e4df;
+  --color-paper: #f7f7f3;
+  --color-well: #ecece7;
+  --color-ink: #1d1f22;
+  --color-mute: #676a6d;
+  --color-faint: #9a9c9b;
+  --color-rule: #d0d0c9;
+
+  --color-plate-blue: #1f4fa3;
+  --color-plate-blue-dark: #183f84;
+  --color-plate-green: #2c7a4b;
+  --color-plate-red: #b8322b;
+  --color-plate-yellow: #f0c02e;
+
+  --font-sans: var(--font-plex), system-ui, sans-serif;
+  --font-num: var(--font-barlow), var(--font-plex), sans-serif;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--color-concrete);
+  color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
@@ -21,16 +35,23 @@ body {
   overscroll-behavior-y: contain;
 }
 
-/* Custom glow and utility effects */
-.glow-lime {
-  box-shadow: 0 0 20px -5px rgba(34, 197, 94, 0.4);
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
-.glow-orange {
-  box-shadow: 0 0 20px -5px rgba(249, 115, 22, 0.4);
+:focus-visible {
+  outline: 2px solid var(--color-plate-blue);
+  outline-offset: 2px;
 }
 
-/* Hide scrollbars for clean mobile feel */
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -39,20 +60,42 @@ body {
   scrollbar-width: none;
 }
 
-/* Glassmorphism */
-.glass-panel {
-  background: rgba(18, 24, 37, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
 }
 
-/* Number input clean style */
-input[type=number]::-webkit-inner-spin-button, 
-input[type=number]::-webkit-outer-spin-button { 
-  -webkit-appearance: none; 
-  margin: 0; 
+/* Sheets slide up from the bottom on phones, scale in on wider screens */
+@keyframes backdrop-in {
+  from { opacity: 0; }
 }
-input[type=number] {
-  -moz-appearance: textfield;
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+}
+@keyframes sheet-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+.sheet-backdrop {
+  animation: backdrop-in 160ms ease-out;
+}
+.sheet-panel {
+  animation: sheet-up 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (min-width: 640px) {
+  .sheet-panel {
+    animation: sheet-pop 180ms ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

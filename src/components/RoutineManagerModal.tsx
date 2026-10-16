@@ -2,23 +2,41 @@
 
 import React, { useState } from 'react';
 import {
-  X,
-  Calendar,
   Plus,
   Trash2,
-  ChevronDown,
-  ChevronUp,
   Play,
   RotateCcw,
-  Check,
-  Dumbbell,
-  Layers,
   Edit2,
   ArrowUp,
   ArrowDown,
+  Search,
+  Layers,
+  Dumbbell,
+  Check,
 } from 'lucide-react';
 import { RoutinePreset } from '@/lib/workoutRoutines';
-import { Exercise } from '@/types/workout';
+import { Exercise, MuscleCategory } from '@/types/workout';
+import Sheet from './Sheet';
+
+const CATEGORIES: MuscleCategory[] = [
+  'All',
+  'Chest',
+  'Back',
+  'Legs',
+  'Shoulders',
+  'Arms',
+  'Core',
+];
+
+const CATEGORY_NAMES_TH: Record<MuscleCategory, string> = {
+  All: 'ทั้งหมด',
+  Chest: 'อก',
+  Back: 'หลัง',
+  Legs: 'ขา',
+  Shoulders: 'ไหล่',
+  Arms: 'แขน',
+  Core: 'ท้อง',
+};
 
 interface RoutineManagerModalProps {
   isOpen: boolean;
@@ -41,6 +59,9 @@ export default function RoutineManagerModal({
 }: RoutineManagerModalProps) {
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
   const [addingExerciseToRoutineId, setAddingExerciseToRoutineId] = useState<string | null>(null);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerCategory, setPickerCategory] = useState<MuscleCategory>('All');
+  const [pickerUnit, setPickerUnit] = useState<'all' | 'pin' | 'kg'>('all');
   const [isCreatingNewRoutine, setIsCreatingNewRoutine] = useState(false);
   const [newRoutineName, setNewRoutineName] = useState('');
   const [newRoutineDay, setNewRoutineDay] = useState('');
@@ -125,312 +146,441 @@ export default function RoutineManagerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full sm:max-w-xl bg-[#121721] rounded-t-3xl sm:rounded-3xl border border-[#1f2737] shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-        {/* Header */}
-        <div className="p-4 border-b border-white/5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-emerald-400" />
-            <h2 className="text-base font-black text-white">
-              จัดการตารางออกกำลังกายแต่ละวัน
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl bg-gray-800 text-gray-400 hover:text-white transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <>
+    <Sheet
+      title="ตารางฝึกแต่ละวัน"
+      description="แตะชื่อตารางเพื่อแก้ไขรายการท่า"
+      onClose={onClose}
+    >
+        <div>
+          <div className="divide-y divide-rule border-b border-rule">
+            {routines.map((routine) => {
+              const isEditing = editingRoutineId === routine.id;
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
-          {routines.map((routine) => {
-            const isEditing = editingRoutineId === routine.id;
-
-            return (
-              <div
-                key={routine.id}
-                className={`rounded-2xl border transition-all ${
-                  isEditing
-                    ? 'bg-[#161d2a] border-emerald-500/40 shadow-lg'
-                    : 'bg-[#141a26] border-white/5 hover:border-white/10'
-                }`}
-              >
-                {/* Routine Card Header */}
-                <div className="p-3.5 flex items-center justify-between">
-                  <div
-                    className="flex-1 cursor-pointer"
-                    onClick={() => setEditingRoutineId(isEditing ? null : routine.id)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-white text-sm">
-                        {routine.name}
-                      </span>
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
-                        {routine.exerciseIds.length} ท่า
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      {routine.focus}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-1.5 ml-2">
-                    {/* Start Routine Button */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onStartRoutine(routine);
-                        onClose();
-                      }}
-                      className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center gap-1 shadow-sm transition active:scale-95"
-                      title="เริ่มเล่นตารางวันนี้"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-black" />
-                      เล่น
-                    </button>
-
-                    {/* Edit Toggle */}
-                    <button
-                      type="button"
+              return (
+                <div
+                  key={routine.id}
+                  className={isEditing ? 'bg-well/50' : ''}
+                >
+                  {/* Routine Card Header */}
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <div
+                      className="flex-1 min-w-0 cursor-pointer"
                       onClick={() => setEditingRoutineId(isEditing ? null : routine.id)}
-                      className={`p-1.5 rounded-xl transition ${
-                        isEditing
-                          ? 'bg-emerald-500/20 text-emerald-400'
-                          : 'bg-gray-800 text-gray-400 hover:text-white'
-                      }`}
-                      title={isEditing ? 'ปิดการแก้ไข' : 'แก้ไขรายการท่า'}
                     >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
+                      <div className="flex items-baseline gap-3">
+                        <span className="font-semibold text-ink text-base truncate">
+                          {routine.name}
+                        </span>
+                        <span className="text-sm text-mute shrink-0">
+                          <span className="num">{routine.exerciseIds.length}</span> ท่า
+                        </span>
+                      </div>
+                      <div className="text-sm text-mute mt-0.5">
+                        {routine.focus}
+                      </div>
+                    </div>
 
-                    {/* Delete Routine */}
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteRoutine(routine.id)}
-                      className="p-1.5 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition"
-                      title="ลบตารางวันนี้"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Expanded Routine Details / Editor */}
-                {isEditing && (
-                  <div className="p-3.5 pt-0 border-t border-white/5 space-y-2 mt-1">
-                    <div className="text-xs font-bold text-gray-400 pt-2 flex items-center justify-between">
-                      <span>รายการท่าในตารางนี้:</span>
+                    <div className="flex items-center gap-1 ml-2">
+                      {/* Start Routine Button */}
                       <button
                         type="button"
-                        onClick={() => setAddingExerciseToRoutineId(routine.id)}
-                        className="text-emerald-400 hover:underline flex items-center gap-1 font-bold"
+                        onClick={() => {
+                          onStartRoutine(routine);
+                          onClose();
+                        }}
+                        className="px-3 py-1.5 rounded-md bg-plate-blue hover:bg-plate-blue-dark text-white font-semibold text-sm flex items-center gap-1"
+                        title="เริ่มเล่นตารางวันนี้"
                       >
-                        <Plus className="w-3.5 h-3.5" />
-                        เพิ่มท่าลงในวันนี้
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        เล่น
+                      </button>
+
+                      {/* Edit Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => setEditingRoutineId(isEditing ? null : routine.id)}
+                        className={`p-2 rounded-md ${
+                          isEditing
+                            ? 'bg-ink text-paper'
+                            : 'text-mute hover:text-ink hover:bg-well'
+                        }`}
+                        title={isEditing ? 'ปิดการแก้ไข' : 'แก้ไขรายการท่า'}
+                        aria-label={isEditing ? 'ปิดการแก้ไข' : 'แก้ไขรายการท่า'}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+
+                      {/* Delete Routine */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRoutine(routine.id)}
+                        className="p-2 rounded-md text-faint hover:text-plate-red hover:bg-plate-red/10"
+                        title="ลบตารางวันนี้"
+                        aria-label="ลบตารางวันนี้"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-
-                    {/* Exercise List */}
-                    {routine.exerciseIds.length === 0 ? (
-                      <div className="text-xs text-gray-500 py-2 text-center">
-                        ยังไม่มีท่าในตารางนี้ กด &quot;เพิ่มท่าลงในวันนี้&quot; เพื่อเลือกท่า
-                      </div>
-                    ) : (
-                      routine.exerciseIds.map((exId, idx) => {
-                        const ex = getExerciseById(exId);
-                        const displayName = ex ? ex.name : exId;
-                        const unitType = ex ? ex.unit_type : 'kg';
-
-                        return (
-                          <div
-                            key={`${routine.id}-${exId}-${idx}`}
-                            className="flex items-center justify-between p-2 rounded-xl bg-[#0e131d] border border-white/5 text-xs"
-                          >
-                            <div className="flex items-center gap-2 flex-1 min-w-0 mr-2">
-                              <span className="font-bold text-gray-400 w-4 text-center">
-                                {idx + 1}
-                              </span>
-                              <span className="text-gray-200 truncate font-medium">
-                                {displayName}
-                              </span>
-                              <span
-                                className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                                  unitType === 'pin'
-                                    ? 'bg-amber-500/10 text-amber-400'
-                                    : 'bg-emerald-500/10 text-emerald-400'
-                                }`}
-                              >
-                                {unitType === 'pin' ? 'แผ่น' : 'kg'}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center space-x-1">
-                              {/* Move Up */}
-                              <button
-                                type="button"
-                                disabled={idx === 0}
-                                onClick={() => handleMoveExercise(routine.id, idx, 'up')}
-                                className="p-1 rounded text-gray-400 hover:text-white disabled:opacity-30"
-                                title="เลื่อนขึ้น"
-                              >
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Move Down */}
-                              <button
-                                type="button"
-                                disabled={idx === routine.exerciseIds.length - 1}
-                                onClick={() => handleMoveExercise(routine.id, idx, 'down')}
-                                className="p-1 rounded text-gray-400 hover:text-white disabled:opacity-30"
-                                title="เลื่อนลง"
-                              >
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Remove */}
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveExercise(routine.id, exId)}
-                                className="p-1 rounded text-gray-500 hover:text-red-400 ml-1"
-                                title="ลบท่านี้ออกจากตาราง"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
 
-          {/* Add New Routine Button */}
-          {!isCreatingNewRoutine ? (
-            <button
-              type="button"
-              onClick={() => setIsCreatingNewRoutine(true)}
-              className="w-full py-3 rounded-2xl border border-dashed border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 text-xs font-bold flex items-center justify-center gap-1.5 transition"
-            >
-              <Plus className="w-4 h-4" />
-              + เพิ่มตารางวันใหม่ (เช่น วันพฤหัสบดี, วันอาทิตย์)
-            </button>
-          ) : (
-            <form
-              onSubmit={handleCreateNewRoutine}
-              className="bg-[#161d2a] p-4 rounded-2xl border border-emerald-500/30 space-y-3"
-            >
-              <div className="font-bold text-xs text-white">สร้างตารางวันใหม่</div>
-              <div>
-                <label className="text-[11px] text-gray-400 mb-1 block">ชื่อตาราง</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="เช่น พฤหัสบดี (Arms & Abs) หรือ Full Body"
-                  value={newRoutineName}
-                  onChange={(e) => setNewRoutineName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#0e131d] border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500"
-                />
-              </div>
+                  {/* Expanded Routine Details / Editor */}
+                  {isEditing && (
+                    <div className="px-4 pb-3">
+                      <div className="text-sm text-mute pb-1 flex items-center justify-between">
+                        <span>ท่าในตารางนี้</span>
+                        <button
+                          type="button"
+                          onClick={() => setAddingExerciseToRoutineId(routine.id)}
+                          className="text-plate-blue hover:underline flex items-center gap-1 font-medium"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          เพิ่มท่า
+                        </button>
+                      </div>
 
-              <div>
-                <label className="text-[11px] text-gray-400 mb-1 block">
-                  เน้นมัดกล้ามเนื้อ (Focus)
-                </label>
-                <input
-                  type="text"
-                  placeholder="เช่น แขนหน้า, แขนหลัง, หน้าท้อง"
-                  value={newRoutineFocus}
-                  onChange={(e) => setNewRoutineFocus(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-[#0e131d] border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500"
-                />
-              </div>
+                      {/* Exercise List */}
+                      {routine.exerciseIds.length === 0 ? (
+                        <div className="text-sm text-mute py-3">
+                          ยังไม่มีท่าในตารางนี้ กด &quot;เพิ่มท่า&quot; เพื่อเลือก
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-rule border-y border-rule">
+                          {routine.exerciseIds.map((exId, idx) => {
+                            const ex = getExerciseById(exId);
+                            const displayName = ex ? ex.name : exId;
+                            const unitType = ex ? ex.unit_type : 'kg';
 
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingNewRoutine(false)}
-                  className="flex-1 py-2 rounded-xl bg-gray-800 text-gray-400 text-xs font-bold"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 rounded-xl bg-emerald-500 text-black text-xs font-bold"
-                >
-                  บันทึกตารางใหม่
-                </button>
-              </div>
-            </form>
-          )}
+                            return (
+                              <div
+                                key={`${routine.id}-${exId}-${idx}`}
+                                className="flex items-center justify-between py-1.5 text-sm"
+                              >
+                                <div className="flex items-center gap-3 flex-1 min-w-0 mr-2">
+                                  <span className="num text-faint w-4 text-right">
+                                    {idx + 1}
+                                  </span>
+                                  <span className="text-ink truncate">
+                                    {displayName}
+                                  </span>
+                                  <span className="text-xs text-mute shrink-0">
+                                    {unitType === 'pin' ? 'แผ่น' : 'kg'}
+                                  </span>
+                                </div>
 
-          {/* Reset button */}
-          <div className="pt-2 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm('คุณต้องการรีเซ็ตตารางทั้งหมดกลับเป็นค่าเริ่มต้นหรือไม่?')) {
-                  onResetToDefault();
-                }
-              }}
-              className="text-xs text-gray-500 hover:text-amber-400 transition inline-flex items-center gap-1 font-medium"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              รีเซ็ตกลับเป็นตารางมาตรฐานเริ่มต้น (Push/Pull/Legs/Upper/Lower)
-            </button>
+                                <div className="flex items-center">
+                                  {/* Move Up */}
+                                  <button
+                                    type="button"
+                                    disabled={idx === 0}
+                                    onClick={() => handleMoveExercise(routine.id, idx, 'up')}
+                                    className="p-1.5 rounded-md text-mute hover:text-ink hover:bg-well disabled:opacity-30 disabled:hover:bg-transparent"
+                                    title="เลื่อนขึ้น"
+                                    aria-label="เลื่อนขึ้น"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Move Down */}
+                                  <button
+                                    type="button"
+                                    disabled={idx === routine.exerciseIds.length - 1}
+                                    onClick={() => handleMoveExercise(routine.id, idx, 'down')}
+                                    className="p-1.5 rounded-md text-mute hover:text-ink hover:bg-well disabled:opacity-30 disabled:hover:bg-transparent"
+                                    title="เลื่อนลง"
+                                    aria-label="เลื่อนลง"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Remove */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveExercise(routine.id, exId)}
+                                    className="p-1.5 ml-1 rounded-md text-faint hover:text-plate-red hover:bg-plate-red/10"
+                                    title="ลบท่านี้ออกจากตาราง"
+                                    aria-label="ลบท่านี้ออกจากตาราง"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        </div>
-      </div>
 
-      {/* Exercise Picker Modal for Routine Day */}
-      {addingExerciseToRoutineId && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-md bg-[#121721] rounded-3xl border border-[#1f2737] shadow-2xl p-4 flex flex-col max-h-[80vh]">
-            <div className="flex items-center justify-between pb-3 border-b border-white/5">
-              <div className="font-bold text-sm text-white">
-                เลือกท่าเพื่อเพิ่มลงในตาราง
-              </div>
+          <div className="p-4 space-y-4">
+            {/* Add New Routine Button */}
+            {!isCreatingNewRoutine ? (
               <button
                 type="button"
-                onClick={() => setAddingExerciseToRoutineId(null)}
-                className="p-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white"
+                onClick={() => setIsCreatingNewRoutine(true)}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-plate-blue hover:underline"
               >
-                <X className="w-4 h-4" />
+                <Plus className="w-4 h-4" />
+                เพิ่มตารางวันใหม่
               </button>
-            </div>
+            ) : (
+              <form onSubmit={handleCreateNewRoutine} className="space-y-3">
+                <div className="font-semibold text-base text-ink">สร้างตารางวันใหม่</div>
+                <div>
+                  <label className="text-sm text-mute mb-1 block">ชื่อตาราง</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="เช่น พฤหัสบดี (Arms & Abs) หรือ Full Body"
+                    value={newRoutineName}
+                    onChange={(e) => setNewRoutineName(e.target.value)}
+                    className="w-full bg-paper border border-rule rounded-md px-3 py-2 text-ink text-sm placeholder:text-faint focus:outline-none focus:border-plate-blue"
+                  />
+                </div>
 
-            <div className="flex-1 overflow-y-auto py-3 space-y-1.5 no-scrollbar">
-              {allExercises.map((ex) => (
-                <button
-                  key={ex.id}
-                  type="button"
-                  onClick={() => handleAddExerciseToRoutine(addingExerciseToRoutineId, ex.id)}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#161d2a] hover:bg-[#1f293a] text-left border border-white/5 transition"
-                >
-                  <div>
-                    <div className="font-bold text-white text-xs">{ex.name}</div>
-                    <div className="text-[10px] text-gray-400">{ex.category}</div>
-                  </div>
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
-                      ex.unit_type === 'pin'
-                        ? 'bg-amber-500/10 text-amber-400'
-                        : 'bg-emerald-500/10 text-emerald-400'
-                    }`}
+                <div>
+                  <label className="text-sm text-mute mb-1 block">
+                    เน้นกล้ามเนื้อส่วนไหน
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="เช่น แขนหน้า, แขนหลัง, หน้าท้อง"
+                    value={newRoutineFocus}
+                    onChange={(e) => setNewRoutineFocus(e.target.value)}
+                    className="w-full bg-paper border border-rule rounded-md px-3 py-2 text-ink text-sm placeholder:text-faint focus:outline-none focus:border-plate-blue"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingNewRoutine(false)}
+                    className="flex-1 px-4 py-2.5 border border-rule bg-paper text-ink text-sm rounded-md hover:bg-well"
                   >
-                    {ex.unit_type === 'pin' ? 'แผ่น' : 'kg'}
-                  </span>
-                </button>
-              ))}
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2.5 bg-plate-blue text-white text-sm font-semibold rounded-md hover:bg-plate-blue-dark"
+                  >
+                    บันทึกตารางใหม่
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Reset button */}
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('คุณต้องการรีเซ็ตตารางทั้งหมดกลับเป็นค่าเริ่มต้นหรือไม่?')) {
+                    onResetToDefault();
+                  }
+                }}
+                className="text-sm text-mute hover:text-plate-red inline-flex items-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                รีเซ็ตเป็นตารางเริ่มต้น (Push, Pull, Legs, Upper, Lower)
+              </button>
             </div>
           </div>
         </div>
-      )}
-    </div>
+    </Sheet>
+
+      {/* Exercise Picker Modal for Routine Day */}
+      {addingExerciseToRoutineId && (() => {
+        const targetRoutine = routines.find((r) => r.id === addingExerciseToRoutineId);
+        const existingIds = targetRoutine ? targetRoutine.exerciseIds : [];
+        const pickerTokens = pickerSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+        const filteredPickerExercises = allExercises.filter((ex) => {
+          if (pickerCategory !== 'All' && ex.category !== pickerCategory) return false;
+          if (pickerUnit === 'pin' && ex.unit_type !== 'pin') return false;
+          if (pickerUnit === 'kg' && ex.unit_type !== 'kg' && ex.unit_type !== 'bodyweight') return false;
+          if (pickerTokens.length === 0) return true;
+
+          const catTh = CATEGORY_NAMES_TH[ex.category] || '';
+          const unitKeywords =
+            ex.unit_type === 'pin'
+              ? 'แผ่น machine เครื่อง pin stack'
+              : 'กิโล kg ดัมเบล dumbbell บาร์เบล barbell ฟรีเวท freeweight';
+          const searchable = `${ex.name} ${ex.category} ${catTh} ${ex.unit_type} ${unitKeywords}`.toLowerCase();
+          return pickerTokens.every((t) => searchable.includes(t));
+        });
+
+        return (
+          <Sheet
+            title="เลือกท่าที่จะเพิ่ม"
+            description={targetRoutine ? `เพิ่มลงในตาราง: ${targetRoutine.name}` : undefined}
+            onClose={() => {
+              setAddingExerciseToRoutineId(null);
+              setPickerSearch('');
+            }}
+            size="md"
+            stacked
+          >
+            {/* Search & Filter Bar */}
+            <div className="sticky top-0 z-10 bg-paper px-4 pt-3 pb-2.5 space-y-2 border-b border-rule">
+              {/* Search Box */}
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="ค้นหาท่า, ส่วนกล้ามเนื้อ, แผ่น, kg..."
+                  value={pickerSearch}
+                  onChange={(e) => setPickerSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 bg-paper border border-rule rounded-md text-ink text-sm placeholder:text-faint focus:outline-none focus:border-plate-blue"
+                />
+                {pickerSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setPickerSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-well text-mute hover:text-ink text-xs"
+                    title="ล้างคำค้นหา"
+                    aria-label="ล้างคำค้นหา"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Category Chips */}
+              <div className="flex gap-1 overflow-x-auto no-scrollbar">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setPickerCategory(cat)}
+                    className={`px-3 py-1 rounded-md text-xs whitespace-nowrap transition-colors ${
+                      pickerCategory === cat
+                        ? 'bg-ink text-paper font-medium'
+                        : 'text-mute hover:bg-well'
+                    }`}
+                  >
+                    {CATEGORY_NAMES_TH[cat]}
+                  </button>
+                ))}
+              </div>
+
+              {/* Unit filters & counter */}
+              <div className="flex items-center justify-between text-xs pt-0.5">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPickerUnit('all')}
+                    className={`px-2 py-0.5 rounded text-[11px] ${
+                      pickerUnit === 'all'
+                        ? 'bg-well text-ink font-semibold'
+                        : 'text-mute hover:text-ink'
+                    }`}
+                  >
+                    ทั้งหมด
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPickerUnit('pin')}
+                    className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 ${
+                      pickerUnit === 'pin'
+                        ? 'bg-well text-plate-blue font-semibold'
+                        : 'text-mute hover:text-ink'
+                    }`}
+                  >
+                    <Layers className="w-3 h-3" />
+                    เครื่อง (แผ่น)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPickerUnit('kg')}
+                    className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 ${
+                      pickerUnit === 'kg'
+                        ? 'bg-well text-plate-blue font-semibold'
+                        : 'text-mute hover:text-ink'
+                    }`}
+                  >
+                    <Dumbbell className="w-3 h-3" />
+                    ฟรีเวท (kg)
+                  </button>
+                </div>
+
+                <span className="text-faint text-[11px]">
+                  {filteredPickerExercises.length} / {allExercises.length} ท่า
+                </span>
+              </div>
+            </div>
+
+            {/* List */}
+            {filteredPickerExercises.length === 0 ? (
+              <div className="px-4 py-8 text-center space-y-2">
+                <p className="text-sm text-mute">
+                  ไม่พบท่าที่ตรงกับ <span className="font-semibold text-ink">&ldquo;{pickerSearch}&rdquo;</span>
+                </p>
+                {pickerSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setPickerSearch('')}
+                    className="px-3 py-1.5 rounded-md border border-rule text-xs text-mute hover:text-ink"
+                  >
+                    ล้างคำค้นหา
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="divide-y divide-rule">
+                {filteredPickerExercises.map((ex) => {
+                  const isAlreadyInRoutine = existingIds.includes(ex.id);
+
+                  return (
+                    <button
+                      key={ex.id}
+                      type="button"
+                      disabled={isAlreadyInRoutine}
+                      onClick={() => {
+                        handleAddExerciseToRoutine(addingExerciseToRoutineId, ex.id);
+                        setPickerSearch('');
+                      }}
+                      className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-left transition-colors ${
+                        isAlreadyInRoutine
+                          ? 'opacity-50 bg-well/30 cursor-not-allowed'
+                          : 'hover:bg-well cursor-pointer'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {ex.unit_type === 'pin' ? (
+                          <Layers className="w-4 h-4 shrink-0 text-faint" />
+                        ) : (
+                          <Dumbbell className="w-4 h-4 shrink-0 text-faint" />
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-medium text-ink text-sm truncate flex items-center gap-1.5">
+                            <span>{ex.name}</span>
+                            {isAlreadyInRoutine && (
+                              <span className="text-[11px] font-normal text-plate-green flex items-center gap-0.5">
+                                <Check className="w-3 h-3" /> ในตารางแล้ว
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-mute">
+                            {CATEGORY_NAMES_TH[ex.category]}
+                          </div>
+                        </div>
+                      </div>
+
+                      <span className="text-xs text-mute shrink-0">
+                        {ex.unit_type === 'pin' ? 'แผ่น' : 'kg'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Sheet>
+        );
+      })()}
+    </>
   );
 }

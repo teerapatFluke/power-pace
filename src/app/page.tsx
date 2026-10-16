@@ -21,6 +21,7 @@ import {
   fetchExercisesFromSupabase,
   saveLocalCustomExercise,
   findLastPerformance,
+  findExerciseMatch,
   syncWorkoutToSupabase,
   testSupabaseConnection,
   getLocalRoutines,
@@ -85,78 +86,84 @@ export default function Home() {
   // Workout duration timer
   const workoutTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize data on mount
-  useEffect(() => {
-    const loadedExercises = getLocalExercises();
-    setExercises(loadedExercises);
+  // Helper to load user-isolated data
+  const loadUserData = async (user: { id: string; email?: string } | null) => {
+    const uid = user?.id || null;
 
-    const loadedRoutines = getLocalRoutines();
-    setRoutines(loadedRoutines);
+    // 1. Load routines for this specific user
+    const localRoutines = getLocalRoutines(uid);
+    setRoutines(localRoutines);
 
-    const loadedLocations = getLocalLocations();
-    setLocations(loadedLocations);
-
-    const currentLoc = getSelectedLocation();
-    setSelectedLocationState(currentLoc);
-
-    const loadedHistory = getLocalWorkoutHistory();
-    setHistory(loadedHistory);
-
-    const active = getLocalActiveWorkout();
-    if (active) {
-      setActiveWorkout(active);
-    }
-
-    // Check Supabase connection and fetch routines & history
-    testSupabaseConnection().then((res) => setSupabaseStatus(res));
-
-    fetchRoutinesFromSupabase().then((remoteRoutines) => {
+    if (uid) {
+      const remoteRoutines = await fetchRoutinesFromSupabase(uid);
       if (remoteRoutines && remoteRoutines.length > 0) {
         setRoutines(remoteRoutines);
-        saveLocalRoutines(remoteRoutines);
-      } else {
-        syncRoutinesToSupabase(loadedRoutines);
+        saveLocalRoutines(remoteRoutines, uid);
+      } else if (remoteRoutines && remoteRoutines.length === 0) {
+        // First time user: save initial copy for their account
+        saveLocalRoutines(localRoutines, uid);
+        await syncRoutinesToSupabase(localRoutines, uid);
       }
-    });
+    }
 
-    fetchWorkoutHistoryFromSupabase().then((remoteHistory) => {
+    // 2. Load workout history for this user
+    const localHistory = getLocalWorkoutHistory(uid);
+    setHistory(localHistory);
+
+    if (uid) {
+      const remoteHistory = await fetchWorkoutHistoryFromSupabase(uid);
       if (remoteHistory && remoteHistory.length > 0) {
         setHistory(remoteHistory);
         localStorage.setItem(
-          'power_pace_workout_history',
+          `power_pace_workout_history_${uid}`,
           JSON.stringify(remoteHistory)
         );
       }
-    });
+    }
 
+    // 3. Load active workout for this user
+    const active = getLocalActiveWorkout(uid);
+    setActiveWorkout(active);
+  };
+
+  // Initialize data on mount
+  useEffect(() => {
+    // 1. 100% Online Exercises from Supabase
+    const cachedExercises = getLocalExercises();
+    setExercises(cachedExercises);
     fetchExercisesFromSupabase().then((remoteExercises) => {
       if (remoteExercises && remoteExercises.length > 0) {
         setExercises(remoteExercises);
       }
     });
 
-    // Check initial Auth session
-    getCurrentUser().then((u) => {
-      if (u) setCurrentUser({ id: u.id, email: u.email });
+    // 2. Gym locations
+    const loadedLocations = getLocalLocations();
+    setLocations(loadedLocations);
+    const currentLoc = getSelectedLocation();
+    setSelectedLocationState(currentLoc);
+
+    // 3. Supabase connection check
+    testSupabaseConnection().then((res) => setSupabaseStatus(res));
+
+    // 4. Initial auth session check and data load
+    getCurrentUser().then(async (u) => {
+      const user = u ? { id: u.id, email: u.email } : null;
+      setCurrentUser(user);
+      await loadUserData(user);
     });
 
-    // Listen to Auth state changes in real time
+    // 5. Real-time auth state listener
     if (isSupabaseConfigured && supabase) {
       const { data: authListener } = supabase.auth.onAuthStateChange(
-        (_event, session) => {
+        async (_event, session) => {
           if (session?.user) {
-            setCurrentUser({ id: session.user.id, email: session.user.email });
-            fetchWorkoutHistoryFromSupabase().then((remoteHistory) => {
-              if (remoteHistory && remoteHistory.length > 0) {
-                setHistory(remoteHistory);
-                localStorage.setItem(
-                  'power_pace_workout_history',
-                  JSON.stringify(remoteHistory)
-                );
-              }
-            });
+            const user = { id: session.user.id, email: session.user.email };
+            setCurrentUser(user);
+            await loadUserData(user);
           } else {
             setCurrentUser(null);
+            await loadUserData(null);
           }
         }
       );
@@ -167,12 +174,12 @@ export default function Home() {
     }
   }, []);
 
-  // Sync active workout to local storage
+  // Sync active workout to local storage per user
   useEffect(() => {
     if (activeWorkout) {
-      setLocalActiveWorkout(activeWorkout);
+      setLocalActiveWorkout(activeWorkout, currentUser?.id);
     }
-  }, [activeWorkout]);
+  }, [activeWorkout, currentUser]);
 
   // Workout duration ticker
   useEffect(() => {
@@ -290,13 +297,14 @@ export default function Home() {
 
     const initialExercises: WorkoutExercise[] = routine.exerciseIds
       .map((exId, idx) => {
-        const exercise = loadedExercises.find((e) => e.id === exId);
+        const exercise = findExerciseMatch(loadedExercises, exId);
         if (!exercise) return null;
         const lastPerf = findLastPerformance(
           exercise.id,
           exercise.name,
           selectedLocation.id,
-          selectedLocation.name
+          selectedLocation.name,
+          currentUser?.id
         );
         const initialWeight = lastPerf
           ? lastPerf.weight_or_pin
@@ -338,21 +346,25 @@ export default function Home() {
 
     setExpandedExerciseId(undefined);
     setActiveWorkout(newSession);
-    setLocalActiveWorkout(newSession);
+    setLocalActiveWorkout(newSession, currentUser?.id);
   };
 
-  // Save / Update Routines
+  // Save / Update Routines (per user)
   const handleSaveRoutines = (updated: RoutinePreset[]) => {
     setRoutines(updated);
-    saveLocalRoutines(updated);
-    syncRoutinesToSupabase(updated);
+    saveLocalRoutines(updated, currentUser?.id);
+    if (currentUser?.id) {
+      syncRoutinesToSupabase(updated, currentUser.id);
+    }
   };
 
-  // Reset Routines to Default
+  // Reset Routines to Default (per user)
   const handleResetRoutines = () => {
-    const def = resetLocalRoutines();
+    const def = resetLocalRoutines(currentUser?.id);
     setRoutines(def);
-    syncRoutinesToSupabase(def);
+    if (currentUser?.id) {
+      syncRoutinesToSupabase(def, currentUser.id);
+    }
   };
 
   // Add exercise to active workout
@@ -584,11 +596,11 @@ export default function Home() {
     };
 
     // Save to local storage history
-    saveLocalWorkoutHistory(completedWorkout);
+    saveLocalWorkoutHistory(completedWorkout, currentUser?.id);
     setHistory((prev) => [completedWorkout, ...prev.filter((w) => w.id !== completedWorkout.id)]);
 
     // Clear active workout
-    setLocalActiveWorkout(null);
+    setLocalActiveWorkout(null, currentUser?.id);
     setActiveWorkout(null);
 
     // Sync to Supabase
@@ -603,7 +615,7 @@ export default function Home() {
   const handleDiscardWorkout = () => {
     if (confirm('ต้องการยกเลิกและรีเซ็ตการฝึกซ้อมรอบนี้ใช่หรือไม่?')) {
       setActiveWorkout(null);
-      setLocalActiveWorkout(null);
+      setLocalActiveWorkout(null, currentUser?.id);
     }
   };
 
@@ -961,9 +973,14 @@ export default function Home() {
         exercises={exercises}
         onClose={() => setIsAddExerciseOpen(false)}
         onSelectExercise={handleSelectExercise}
-        onCreateCustomExercise={(newEx) => {
-          saveLocalCustomExercise(newEx);
-          setExercises((prev) => [...prev, newEx]);
+        onCreateCustomExercise={async (newEx) => {
+          await saveLocalCustomExercise(newEx);
+          const online = await fetchExercisesFromSupabase();
+          if (online && online.length > 0) {
+            setExercises(online);
+          } else {
+            setExercises((prev) => [...prev, newEx]);
+          }
         }}
       />
 
@@ -974,7 +991,8 @@ export default function Home() {
         onDeleteSession={(id) => {
           const updated = history.filter((h) => h.id !== id);
           setHistory(updated);
-          localStorage.setItem('power_pace_workout_history', JSON.stringify(updated));
+          const key = `power_pace_workout_history_${currentUser?.id || 'guest'}`;
+          localStorage.setItem(key, JSON.stringify(updated));
         }}
       />
 

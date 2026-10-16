@@ -1,15 +1,19 @@
 import { Exercise, WorkoutSession, WorkoutExercise, GymLocation } from '@/types/workout';
 import { supabase, isSupabaseConfigured } from './supabase';
-import { DEFAULT_EXERCISES } from './defaultExercises';
 import { WORKOUT_ROUTINES, RoutinePreset } from './workoutRoutines';
 import { DEFAULT_LOCATIONS } from './defaultLocations';
 
-const ACTIVE_WORKOUT_KEY = 'power_pace_active_workout';
-const HISTORY_KEY = 'power_pace_workout_history';
+const ACTIVE_WORKOUT_PREFIX = 'power_pace_active_workout';
+const HISTORY_PREFIX = 'power_pace_workout_history';
+const ROUTINES_PREFIX = 'power_pace_routines';
 const CUSTOM_EXERCISES_KEY = 'power_pace_custom_exercises';
-const ROUTINES_KEY = 'power_pace_routines';
+const EXERCISES_CACHE_KEY = 'power_pace_exercises_cache';
 const LOCATIONS_KEY = 'power_pace_gym_locations';
 const SELECTED_LOCATION_KEY = 'power_pace_selected_location';
+
+function getUserStorageKey(prefix: string, userId?: string | null): string {
+  return `${prefix}_${userId || 'guest'}`;
+}
 
 export function getLocalLocations(): GymLocation[] {
   if (typeof window === 'undefined') return DEFAULT_LOCATIONS;
@@ -48,37 +52,62 @@ export function setSelectedLocation(location: GymLocation): void {
   localStorage.setItem(SELECTED_LOCATION_KEY, JSON.stringify(location));
 }
 
-
-export function getLocalRoutines(): RoutinePreset[] {
+// --- User Isolated Routines ---
+export function getLocalRoutines(userId?: string | null): RoutinePreset[] {
   if (typeof window === 'undefined') return WORKOUT_ROUTINES;
-  const raw = localStorage.getItem(ROUTINES_KEY);
+  const key = getUserStorageKey(ROUTINES_PREFIX, userId);
+  const raw = localStorage.getItem(key);
   if (!raw) return WORKOUT_ROUTINES;
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : WORKOUT_ROUTINES;
   } catch {
     return WORKOUT_ROUTINES;
   }
 }
 
-export function saveLocalRoutines(routines: RoutinePreset[]): void {
+export function saveLocalRoutines(routines: RoutinePreset[], userId?: string | null): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(ROUTINES_KEY, JSON.stringify(routines));
+  const key = getUserStorageKey(ROUTINES_PREFIX, userId);
+  localStorage.setItem(key, JSON.stringify(routines));
 }
 
-export function resetLocalRoutines(): RoutinePreset[] {
+export function resetLocalRoutines(userId?: string | null): RoutinePreset[] {
   if (typeof window === 'undefined') return WORKOUT_ROUTINES;
-  localStorage.removeItem(ROUTINES_KEY);
+  const key = getUserStorageKey(ROUTINES_PREFIX, userId);
+  localStorage.removeItem(key);
   return WORKOUT_ROUTINES;
 }
 
-// --- Supabase Routines Sync ---
-export async function fetchRoutinesFromSupabase(): Promise<RoutinePreset[] | null> {
+// Fetch user's private routines from Supabase
+export async function fetchRoutinesFromSupabase(userId?: string | null): Promise<RoutinePreset[] | null> {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
-    const { data, error } = await supabase
+    let uid = userId;
+    if (!uid) {
+      const { data } = await supabase.auth.getUser();
+      uid = data?.user?.id;
+    }
+    // Guests only use local browser routines
+    if (!uid) return null;
+
+    // 1. Try querying with user_id column
+    let { data, error } = await supabase
       .from('routines')
       .select('*')
+      .eq('user_id', uid)
       .order('order_index', { ascending: true });
+
+    // 2. Fallback: if user_id column is not in DB yet, query by user-prefixed id
+    if (error && (error.message?.includes('user_id') || error.code === '42703')) {
+      const fallback = await supabase
+        .from('routines')
+        .select('*')
+        .like('id', `${uid}_%`)
+        .order('order_index', { ascending: true });
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       console.warn('Could not fetch routines from Supabase:', error.message);
@@ -86,28 +115,45 @@ export async function fetchRoutinesFromSupabase(): Promise<RoutinePreset[] | nul
     }
 
     if (data && data.length > 0) {
-      return data.map((r) => ({
-        id: r.id,
-        day: r.day,
-        name: r.name,
-        focus: r.focus,
-        exerciseIds: Array.isArray(r.exercise_ids)
-          ? r.exercise_ids
-          : JSON.parse(r.exercise_ids || '[]'),
-      }));
+      return data.map((r) => {
+        const cleanId = r.id.startsWith(`${uid}_`) ? r.id.replace(`${uid}_`, '') : r.id;
+        return {
+          id: cleanId,
+          day: r.day,
+          name: r.name,
+          focus: r.focus,
+          exerciseIds: Array.isArray(r.exercise_ids)
+            ? r.exercise_ids
+            : JSON.parse(r.exercise_ids || '[]'),
+        };
+      });
     }
-    return null;
+
+    return [];
   } catch (e) {
     console.warn('Supabase routines fetch error:', e);
     return null;
   }
 }
 
-export async function syncRoutinesToSupabase(routines: RoutinePreset[]): Promise<boolean> {
+// Sync user's private routines to Supabase (isolated with user_id & unique prefix)
+export async function syncRoutinesToSupabase(
+  routines: RoutinePreset[],
+  userId?: string | null
+): Promise<boolean> {
   if (!isSupabaseConfigured || !supabase) return false;
   try {
-    const payload = routines.map((r, index) => ({
-      id: r.id,
+    let uid = userId;
+    if (!uid) {
+      const { data } = await supabase.auth.getUser();
+      uid = data?.user?.id;
+    }
+    if (!uid) return false;
+
+    // Payload with user_id & prefixed id to guarantee zero collision across users
+    const payloadWithUser = routines.map((r, index) => ({
+      id: `${uid}_${r.id}`,
+      user_id: uid,
       day: r.day,
       name: r.name,
       focus: r.focus,
@@ -116,23 +162,39 @@ export async function syncRoutinesToSupabase(routines: RoutinePreset[]): Promise
       updated_at: new Date().toISOString(),
     }));
 
-    const { error } = await supabase.from('routines').upsert(payload);
+    let { error } = await supabase.from('routines').upsert(payloadWithUser);
+
+    // Fallback if user_id column doesn't exist yet in Supabase table
+    if (error && (error.message?.includes('user_id') || error.code === '42703')) {
+      const payloadWithoutUserCol = routines.map((r, index) => ({
+        id: `${uid}_${r.id}`,
+        day: r.day,
+        name: r.name,
+        focus: r.focus,
+        exercise_ids: r.exerciseIds,
+        order_index: index,
+        updated_at: new Date().toISOString(),
+      }));
+      const fallback = await supabase.from('routines').upsert(payloadWithoutUserCol);
+      error = fallback.error;
+    }
+
     if (error) {
-      console.warn('Could not sync routines to Supabase:', error.message);
+      console.warn('Could not sync user routines to Supabase:', error.message);
       return false;
     }
     return true;
   } catch (e) {
-    console.warn('Supabase routines sync error:', e);
+    console.warn('Supabase user routines sync error:', e);
     return false;
   }
 }
 
-
-// --- Local Storage Helpers ---
-export function getLocalActiveWorkout(): WorkoutSession | null {
+// --- User Isolated Active Workout & History ---
+export function getLocalActiveWorkout(userId?: string | null): WorkoutSession | null {
   if (typeof window === 'undefined') return null;
-  const raw = localStorage.getItem(ACTIVE_WORKOUT_KEY);
+  const key = getUserStorageKey(ACTIVE_WORKOUT_PREFIX, userId);
+  const raw = localStorage.getItem(key);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -141,18 +203,20 @@ export function getLocalActiveWorkout(): WorkoutSession | null {
   }
 }
 
-export function setLocalActiveWorkout(workout: WorkoutSession | null) {
+export function setLocalActiveWorkout(workout: WorkoutSession | null, userId?: string | null) {
   if (typeof window === 'undefined') return;
+  const key = getUserStorageKey(ACTIVE_WORKOUT_PREFIX, userId);
   if (!workout) {
-    localStorage.removeItem(ACTIVE_WORKOUT_KEY);
+    localStorage.removeItem(key);
   } else {
-    localStorage.setItem(ACTIVE_WORKOUT_KEY, JSON.stringify(workout));
+    localStorage.setItem(key, JSON.stringify(workout));
   }
 }
 
-export function getLocalWorkoutHistory(): WorkoutSession[] {
+export function getLocalWorkoutHistory(userId?: string | null): WorkoutSession[] {
   if (typeof window === 'undefined') return [];
-  const raw = localStorage.getItem(HISTORY_KEY);
+  const key = getUserStorageKey(HISTORY_PREFIX, userId);
+  const raw = localStorage.getItem(key);
   if (!raw) return [];
   try {
     return JSON.parse(raw);
@@ -161,18 +225,18 @@ export function getLocalWorkoutHistory(): WorkoutSession[] {
   }
 }
 
-export function saveLocalWorkoutHistory(workout: WorkoutSession) {
+export function saveLocalWorkoutHistory(workout: WorkoutSession, userId?: string | null) {
   if (typeof window === 'undefined') return;
-  const history = getLocalWorkoutHistory();
+  const history = getLocalWorkoutHistory(userId);
   const filtered = history.filter((w) => w.id !== workout.id);
   const updated = [workout, ...filtered];
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+  const key = getUserStorageKey(HISTORY_PREFIX, userId);
+  localStorage.setItem(key, JSON.stringify(updated));
 }
 
-const EXERCISES_CACHE_KEY = 'power_pace_exercises_cache';
-
+// --- 100% Online Exercises Library ---
 export function getLocalExercises(): Exercise[] {
-  if (typeof window === 'undefined') return DEFAULT_EXERCISES;
+  if (typeof window === 'undefined') return [];
   const cached = localStorage.getItem(EXERCISES_CACHE_KEY);
   if (cached) {
     try {
@@ -183,15 +247,14 @@ export function getLocalExercises(): Exercise[] {
     }
   }
   const raw = localStorage.getItem(CUSTOM_EXERCISES_KEY);
-  let custom: Exercise[] = [];
   if (raw) {
     try {
-      custom = JSON.parse(raw);
+      return JSON.parse(raw);
     } catch {
-      custom = [];
+      return [];
     }
   }
-  return [...DEFAULT_EXERCISES, ...custom];
+  return [];
 }
 
 export function saveLocalExercisesCache(exercises: Exercise[]) {
@@ -229,14 +292,7 @@ export async function fetchExercisesFromSupabase(): Promise<Exercise[] | null> {
   }
 }
 
-export async function saveLocalCustomExercise(exercise: Exercise) {
-  if (typeof window === 'undefined') return;
-  const raw = localStorage.getItem(CUSTOM_EXERCISES_KEY);
-  let custom: Exercise[] = raw ? JSON.parse(raw) : [];
-  custom = [...custom.filter((e) => e.id !== exercise.id), exercise];
-  localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(custom));
-
-  // Also sync to Supabase exercises table
+export async function saveLocalCustomExercise(exercise: Exercise): Promise<void> {
   if (isSupabaseConfigured && supabase) {
     try {
       await supabase.from('exercises').upsert({
@@ -244,10 +300,83 @@ export async function saveLocalCustomExercise(exercise: Exercise) {
         category: exercise.category,
         unit_type: exercise.unit_type,
       });
+      // Refresh online exercises
+      await fetchExercisesFromSupabase();
+      return;
     } catch (e) {
       console.warn('Could not sync custom exercise to Supabase:', e);
     }
   }
+
+  if (typeof window !== 'undefined') {
+    const raw = localStorage.getItem(CUSTOM_EXERCISES_KEY);
+    let custom: Exercise[] = raw ? JSON.parse(raw) : [];
+    custom = [...custom.filter((e) => e.id !== exercise.id), exercise];
+    localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(custom));
+  }
+}
+
+// Smart exercise matcher: matches by id (exact or lowercase), exact name, slug, or keywords
+export function findExerciseMatch(
+  exercises: Exercise[],
+  idOrKey: string
+): Exercise | undefined {
+  if (!idOrKey) return undefined;
+  
+  // 1. Direct ID match
+  const byId = exercises.find((e) => e.id === idOrKey);
+  if (byId) return byId;
+
+  // 2. Case-insensitive ID match
+  const byIdLower = exercises.find((e) => e.id.toLowerCase() === idOrKey.toLowerCase());
+  if (byIdLower) return byIdLower;
+
+  // 3. Name exact match
+  const byName = exercises.find(
+    (e) => e.name.toLowerCase() === idOrKey.toLowerCase()
+  );
+  if (byName) return byName;
+
+  // 4. Keyword / slug matching for presets
+  const normalizedKey = idOrKey.toLowerCase().replace(/[-_]/g, ' ');
+  const byKeyword = exercises.find((e) => {
+    const n = e.name.toLowerCase();
+    return n.includes(normalizedKey) || normalizedKey.includes(n);
+  });
+  if (byKeyword) return byKeyword;
+
+  // 5. Common preset slug keywords
+  const slugKeywords: Record<string, string[]> = {
+    'chest-press-machine': ['chest press machine', 'เครื่องดันอก', 'อกกลางเครื่อง'],
+    'incline-db-press': ['incline dumbbell press', 'ดัมเบลอกบน'],
+    'incline-chest-press': ['incline chest press', 'อกบนเครื่อง', 'เน้นอกบน'],
+    'shoulder-press-machine': ['shoulder press machine', 'เครื่องดันไหล่', 'ไหล่หน้า'],
+    'lateral-raise': ['lateral raise', 'ไหล่ข้าง', 'ยกไหล่ข้าง'],
+    'triceps-pressdown': ['triceps pressdown', 'เคเบิลกดหลังแขน', 'หลังแขน'],
+    'lat-pulldown': ['lat pulldown', 'ดึงหลัง', 'ดึงปีก'],
+    'mid-row-machine': ['mid row machine', 'ดึงสะบักเครื่อง', 'หลังสะบัก'],
+    'rear-delt-fly': ['rear delt fly', 'เครื่องไหล่หลัง', 'ไหล่หลัง'],
+    'bicep-curl': ['bicep curl', 'ดัมเบลหน้าแขน', 'หน้าแขน'],
+    'hammer-curl': ['hammer curl', 'ดัมเบลแฮมเมอร์', 'ลำแขน'],
+    'leg-press': ['leg press', 'เครื่องเลกเพรส', 'ขารวม/ก้น'],
+    'leg-extension': ['leg extension', 'เครื่องเตะหน้าขา', 'เตะขาหน้า', 'หน้าขา'],
+    'lying-leg-curl': ['lying leg curl', 'เครื่องนอนพับขา', 'ดึงขาหลัง', 'หลังขา'],
+    'calf-raises': ['calf raise', 'เขย่งน่อง', 'น่อง'],
+    'ab-crunch-machine': ['ab crunch', 'เครื่องซิทอัพหน้าท้อง', 'หน้าท้อง', 'sit-up', 'ซิทอัพ'],
+    'bicep-triceps-superset': ['bicep curl / triceps pressdown', 'สลับเล่น', 'bicep'],
+    'sit-up': ['sit-up', 'crunches', 'ซิทอัพหน้าท้อง'],
+  };
+
+  const keywords = slugKeywords[idOrKey];
+  if (keywords) {
+    const match = exercises.find((e) => {
+      const lower = e.name.toLowerCase();
+      return keywords.some((kw) => lower.includes(kw));
+    });
+    if (match) return match;
+  }
+
+  return undefined;
 }
 
 // Find previous performance for an exercise (STRICTLY isolated to the current gym location only)
@@ -255,9 +384,10 @@ export function findLastPerformance(
   exerciseId: string,
   exerciseName: string,
   currentLocationId?: string,
-  currentLocationName?: string
+  currentLocationName?: string,
+  userId?: string | null
 ) {
-  const history = getLocalWorkoutHistory();
+  const history = getLocalWorkoutHistory(userId);
 
   if (!currentLocationId && !currentLocationName) return null;
 
@@ -355,16 +485,26 @@ export async function syncWorkoutToSupabase(workout: WorkoutSession): Promise<{ 
   }
 }
 
-// Fetch Workout History from Supabase
-export async function fetchWorkoutHistoryFromSupabase(): Promise<WorkoutSession[] | null> {
+// Fetch Workout History from Supabase (strictly isolated to logged-in user)
+export async function fetchWorkoutHistoryFromSupabase(
+  userId?: string | null
+): Promise<WorkoutSession[] | null> {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
+    let uid = userId;
+    if (!uid) {
+      const { data } = await supabase.auth.getUser();
+      uid = data?.user?.id;
+    }
+    if (!uid) return null;
+
     const { data: workoutsData, error: wError } = await supabase
       .from('workouts')
       .select('id, title, date, duration_seconds, location_name, created_at')
+      .eq('user_id', uid)
       .order('date', { ascending: false });
 
-    if (wError || !workoutsData || workoutsData.length === 0) return null;
+    if (wError || !workoutsData || workoutsData.length === 0) return [];
 
     const sessions: WorkoutSession[] = [];
 

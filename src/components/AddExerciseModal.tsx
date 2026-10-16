@@ -20,6 +20,7 @@ const CATEGORIES: MuscleCategory[] = [
   'Legs',
   'Shoulders',
   'Arms',
+  'Core',
 ];
 
 const CATEGORY_NAMES_TH: Record<MuscleCategory, string> = {

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { RoutinePreset } from '@/lib/workoutRoutines';
 import { Exercise, MuscleCategory } from '@/types/workout';
+import { findExerciseMatch } from '@/lib/storage';
 import Sheet from './Sheet';
 
 const CATEGORIES: MuscleCategory[] = [
@@ -69,7 +70,7 @@ export default function RoutineManagerModal({
 
   if (!isOpen) return null;
 
-  const getExerciseById = (id: string) => allExercises.find((ex) => ex.id === id);
+  const getExerciseById = (id: string) => findExerciseMatch(allExercises, id);
 
   // Reorder exercises inside a routine
   const handleMoveExercise = (routineId: string, index: number, direction: 'up' | 'down') => {

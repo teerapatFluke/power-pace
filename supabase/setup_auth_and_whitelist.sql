@@ -74,3 +74,11 @@ CREATE POLICY "Users access own exercise_sets" ON exercise_sets
       AND workouts.user_id = auth.uid()
     )
   );
+
+-- 6. ตั้งค่า RLS สำหรับ routines ให้แต่ละคนเข้าถึงและแก้ไขได้เฉพาะตารางของตัวเอง (ของใครของมัน)
+DROP POLICY IF EXISTS "Public access routines" ON routines;
+DROP POLICY IF EXISTS "Users can only access own routines" ON routines;
+CREATE POLICY "Users can only access own routines" ON routines
+  FOR ALL
+  USING (auth.uid() = user_id OR user_id IS NULL)
+  WITH CHECK (auth.uid() = user_id);

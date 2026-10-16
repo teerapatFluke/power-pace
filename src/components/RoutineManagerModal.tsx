@@ -13,8 +13,14 @@ import {
   Layers,
   Dumbbell,
   Check,
+  Sparkles,
 } from 'lucide-react';
-import { RoutinePreset } from '@/lib/workoutRoutines';
+import {
+  RoutinePreset,
+  DAYS_OF_WEEK,
+  PROGRAM_TEMPLATES,
+  ProgramTemplate,
+} from '@/lib/workoutRoutines';
 import { Exercise, MuscleCategory } from '@/types/workout';
 import { findExerciseMatch } from '@/lib/storage';
 import Sheet from './Sheet';
@@ -65,12 +71,35 @@ export default function RoutineManagerModal({
   const [pickerUnit, setPickerUnit] = useState<'all' | 'pin' | 'kg'>('all');
   const [isCreatingNewRoutine, setIsCreatingNewRoutine] = useState(false);
   const [newRoutineName, setNewRoutineName] = useState('');
-  const [newRoutineDay, setNewRoutineDay] = useState('');
+  const [newRoutineDay, setNewRoutineDay] = useState<string>(DAYS_OF_WEEK[0]);
   const [newRoutineFocus, setNewRoutineFocus] = useState('');
 
   if (!isOpen) return null;
 
   const getExerciseById = (id: string) => findExerciseMatch(allExercises, id);
+
+  // Update routine name, day, or focus
+  const handleUpdateRoutineDetails = (
+    routineId: string,
+    updates: Partial<RoutinePreset>
+  ) => {
+    const updated = routines.map((r) =>
+      r.id === routineId ? { ...r, ...updates } : r
+    );
+    onSaveRoutines(updated);
+  };
+
+  // Apply a standard program template
+  const handleApplyTemplate = (template: ProgramTemplate) => {
+    if (
+      confirm(
+        `ต้องการเปลี่ยนตารางฝึกทั้งหมดเป็น "${template.name}" (${template.daysCount} วัน) หรือไม่?`
+      )
+    ) {
+      onSaveRoutines(template.routines);
+      setEditingRoutineId(null);
+    }
+  };
 
   // Reorder exercises inside a routine
   const handleMoveExercise = (routineId: string, index: number, direction: 'up' | 'down') => {
@@ -133,14 +162,14 @@ export default function RoutineManagerModal({
     const newRoutine: RoutinePreset = {
       id: `routine-${Date.now()}`,
       name: newRoutineName.trim(),
-      day: newRoutineDay.trim() || 'วันใหม่',
+      day: newRoutineDay.trim() || DAYS_OF_WEEK[0],
       focus: newRoutineFocus.trim() || 'กำหนดเอง',
       exerciseIds: [],
     };
 
     onSaveRoutines([...routines, newRoutine]);
     setNewRoutineName('');
-    setNewRoutineDay('');
+    setNewRoutineDay(DAYS_OF_WEEK[0]);
     setNewRoutineFocus('');
     setIsCreatingNewRoutine(false);
     setEditingRoutineId(newRoutine.id);
@@ -149,11 +178,41 @@ export default function RoutineManagerModal({
   return (
     <>
     <Sheet
-      title="ตารางฝึกแต่ละวัน"
-      description="แตะชื่อตารางเพื่อแก้ไขรายการท่า"
+      title="ตารางฝึกซ้อม"
+      description="ปรับแต่งตารางของตัวเอง เลือกโปรแกรม หรือเปลี่ยนชื่อท่า/วันได้อิสระ"
       onClose={onClose}
     >
         <div>
+          {/* Quick Program Templates Selector */}
+          <div className="p-4 bg-well/30 border-b border-rule">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-ink uppercase tracking-wider mb-2.5">
+              <Sparkles className="w-3.5 h-3.5 text-plate-blue" />
+              เลือกรูปแบบโปรแกรมฝึกยอดนิยม
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {PROGRAM_TEMPLATES.map((tmpl) => (
+                <button
+                  key={tmpl.id}
+                  type="button"
+                  onClick={() => handleApplyTemplate(tmpl)}
+                  className="p-2.5 bg-paper hover:bg-well border border-rule rounded-lg text-left transition-all hover:border-plate-blue/50 flex flex-col justify-between group"
+                >
+                  <div>
+                    <div className="text-xs font-semibold text-ink group-hover:text-plate-blue transition-colors">
+                      {tmpl.name}
+                    </div>
+                    <div className="text-[11px] text-mute line-clamp-1 mt-0.5">
+                      {tmpl.description}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-[10px] font-semibold text-plate-blue bg-plate-blue/10 rounded px-1.5 py-0.5 w-fit">
+                    {tmpl.badge}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="divide-y divide-rule border-b border-rule">
             {routines.map((routine) => {
               const isEditing = editingRoutineId === routine.id;
@@ -169,7 +228,10 @@ export default function RoutineManagerModal({
                       className="flex-1 min-w-0 cursor-pointer"
                       onClick={() => setEditingRoutineId(isEditing ? null : routine.id)}
                     >
-                      <div className="flex items-baseline gap-3">
+                      <div className="flex items-baseline gap-2.5 flex-wrap">
+                        <span className="text-xs font-semibold text-plate-blue bg-plate-blue/10 px-2 py-0.5 rounded-full shrink-0">
+                          {routine.day}
+                        </span>
                         <span className="font-semibold text-ink text-base truncate">
                           {routine.name}
                         </span>
@@ -206,8 +268,8 @@ export default function RoutineManagerModal({
                             ? 'bg-ink text-paper'
                             : 'text-mute hover:text-ink hover:bg-well'
                         }`}
-                        title={isEditing ? 'ปิดการแก้ไข' : 'แก้ไขรายการท่า'}
-                        aria-label={isEditing ? 'ปิดการแก้ไข' : 'แก้ไขรายการท่า'}
+                        title={isEditing ? 'ปิดการแก้ไข' : 'แก้ไขชื่อ/วัน/รายการท่า'}
+                        aria-label={isEditing ? 'ปิดการแก้ไข' : 'แก้ไขชื่อ/วัน/รายการท่า'}
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -227,9 +289,69 @@ export default function RoutineManagerModal({
 
                   {/* Expanded Routine Details / Editor */}
                   {isEditing && (
-                    <div className="px-4 pb-3">
-                      <div className="text-sm text-mute pb-1 flex items-center justify-between">
-                        <span>ท่าในตารางนี้</span>
+                    <div className="px-4 pb-3 space-y-3">
+                      {/* Edit Routine Day & Name & Focus */}
+                      <div className="p-3 bg-paper rounded-lg border border-rule space-y-2.5 shadow-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-xs font-semibold text-mute block mb-1">
+                              วันในสัปดาห์
+                            </label>
+                            <select
+                              value={routine.day}
+                              onChange={(e) =>
+                                handleUpdateRoutineDetails(routine.id, {
+                                  day: e.target.value,
+                                })
+                              }
+                              className="w-full bg-well border border-rule rounded-md px-2.5 py-1.5 text-ink text-sm focus:outline-none focus:border-plate-blue font-medium"
+                            >
+                              {DAYS_OF_WEEK.map((d) => (
+                                <option key={d} value={d}>
+                                  วัน{d}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="text-xs font-semibold text-mute block mb-1">
+                              ชื่อตารางฝึก (ปรับชื่อตามใจชอบ)
+                            </label>
+                            <input
+                              type="text"
+                              value={routine.name}
+                              onChange={(e) =>
+                                handleUpdateRoutineDetails(routine.id, {
+                                  name: e.target.value,
+                                })
+                              }
+                              placeholder="เช่น จันทร์ (Push) หรือ Full Body A หรือ อก + หลัง"
+                              className="w-full bg-well border border-rule rounded-md px-2.5 py-1.5 text-ink text-sm focus:outline-none focus:border-plate-blue font-medium"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-semibold text-mute block mb-1">
+                            กล้ามเนื้อที่เน้น / โฟกัส
+                          </label>
+                          <input
+                            type="text"
+                            value={routine.focus}
+                            onChange={(e) =>
+                              handleUpdateRoutineDetails(routine.id, {
+                                focus: e.target.value,
+                              })
+                            }
+                            placeholder="เช่น อกกลาง, อกบน, ไหล่หน้า..."
+                            className="w-full bg-well border border-rule rounded-md px-2.5 py-1.5 text-ink text-xs focus:outline-none focus:border-plate-blue"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-mute pt-1 flex items-center justify-between">
+                        <span>ท่าในตารางนี้ ({routine.exerciseIds.length} ท่า)</span>
                         <button
                           type="button"
                           onClick={() => setAddingExerciseToRoutineId(routine.id)}
@@ -331,16 +453,32 @@ export default function RoutineManagerModal({
             ) : (
               <form onSubmit={handleCreateNewRoutine} className="space-y-3">
                 <div className="font-semibold text-base text-ink">สร้างตารางวันใหม่</div>
-                <div>
-                  <label className="text-sm text-mute mb-1 block">ชื่อตาราง</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="เช่น พฤหัสบดี (Arms & Abs) หรือ Full Body"
-                    value={newRoutineName}
-                    onChange={(e) => setNewRoutineName(e.target.value)}
-                    className="w-full bg-paper border border-rule rounded-md px-3 py-2 text-ink text-sm placeholder:text-faint focus:outline-none focus:border-plate-blue"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-sm text-mute mb-1 block">วันในสัปดาห์</label>
+                    <select
+                      value={newRoutineDay}
+                      onChange={(e) => setNewRoutineDay(e.target.value)}
+                      className="w-full bg-paper border border-rule rounded-md px-3 py-2 text-ink text-sm focus:outline-none focus:border-plate-blue font-medium"
+                    >
+                      {DAYS_OF_WEEK.map((d) => (
+                        <option key={d} value={d}>
+                          วัน{d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-sm text-mute mb-1 block">ชื่อตาราง</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="เช่น พฤหัสบดี (Arms & Abs) หรือ Full Body"
+                      value={newRoutineName}
+                      onChange={(e) => setNewRoutineName(e.target.value)}
+                      className="w-full bg-paper border border-rule rounded-md px-3 py-2 text-ink text-sm placeholder:text-faint focus:outline-none focus:border-plate-blue"
+                    />
+                  </div>
                 </div>
 
                 <div>

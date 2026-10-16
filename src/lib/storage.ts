@@ -162,6 +162,25 @@ export async function syncRoutinesToSupabase(
       updated_at: new Date().toISOString(),
     }));
 
+    // Clean up removed routine days for this user
+    const activeIds = payloadWithUser.map((p) => p.id);
+    try {
+      const { data: existing } = await supabase
+        .from('routines')
+        .select('id')
+        .eq('user_id', uid);
+      if (existing && existing.length > 0) {
+        const toDelete = existing
+          .map((e) => e.id)
+          .filter((id) => !activeIds.includes(id));
+        if (toDelete.length > 0) {
+          await supabase.from('routines').delete().in('id', toDelete);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     let { error } = await supabase.from('routines').upsert(payloadWithUser);
 
     // Fallback if user_id column doesn't exist yet in Supabase table

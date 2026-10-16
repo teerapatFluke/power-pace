@@ -30,6 +30,64 @@ export function resetLocalRoutines(): RoutinePreset[] {
   return WORKOUT_ROUTINES;
 }
 
+// --- Supabase Routines Sync ---
+export async function fetchRoutinesFromSupabase(): Promise<RoutinePreset[] | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('routines')
+      .select('*')
+      .order('order_index', { ascending: true });
+
+    if (error) {
+      console.warn('Could not fetch routines from Supabase:', error.message);
+      return null;
+    }
+
+    if (data && data.length > 0) {
+      return data.map((r) => ({
+        id: r.id,
+        day: r.day,
+        name: r.name,
+        focus: r.focus,
+        exerciseIds: Array.isArray(r.exercise_ids)
+          ? r.exercise_ids
+          : JSON.parse(r.exercise_ids || '[]'),
+      }));
+    }
+    return null;
+  } catch (e) {
+    console.warn('Supabase routines fetch error:', e);
+    return null;
+  }
+}
+
+export async function syncRoutinesToSupabase(routines: RoutinePreset[]): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const payload = routines.map((r, index) => ({
+      id: r.id,
+      day: r.day,
+      name: r.name,
+      focus: r.focus,
+      exercise_ids: r.exerciseIds,
+      order_index: index,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabase.from('routines').upsert(payload);
+    if (error) {
+      console.warn('Could not sync routines to Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('Supabase routines sync error:', e);
+    return false;
+  }
+}
+
+
 // --- Local Storage Helpers ---
 export function getLocalActiveWorkout(): WorkoutSession | null {
   if (typeof window === 'undefined') return null;

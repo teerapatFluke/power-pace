@@ -50,15 +50,28 @@ CREATE TABLE IF NOT EXISTS exercise_sets (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS routines (
+  id TEXT PRIMARY KEY,
+  day TEXT NOT NULL,
+  name TEXT NOT NULL,
+  focus TEXT,
+  exercise_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  order_index INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 ALTER TABLE exercises ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workouts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workout_exercises ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exercise_sets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE routines ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Public access exercises" ON exercises FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public access workouts" ON workouts FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public access workout_exercises" ON workout_exercises FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public access exercise_sets" ON exercise_sets FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public access routines" ON routines FOR ALL USING (true) WITH CHECK (true);
+
 
 -- ท่าประจำตารางฝึกซ้อม
 INSERT INTO exercises (name, category, unit_type) VALUES

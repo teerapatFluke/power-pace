@@ -34,6 +34,8 @@ import {
   getLocalRoutines,
   saveLocalRoutines,
   resetLocalRoutines,
+  fetchRoutinesFromSupabase,
+  syncRoutinesToSupabase,
 } from '@/lib/storage';
 import ExerciseCard from '@/components/ExerciseCard';
 import AddExerciseModal from '@/components/AddExerciseModal';
@@ -87,8 +89,17 @@ export default function Home() {
       setActiveWorkout(active);
     }
 
-    // Check Supabase connection
+    // Check Supabase connection and fetch routines
     testSupabaseConnection().then((res) => setSupabaseStatus(res));
+
+    fetchRoutinesFromSupabase().then((remoteRoutines) => {
+      if (remoteRoutines && remoteRoutines.length > 0) {
+        setRoutines(remoteRoutines);
+        saveLocalRoutines(remoteRoutines);
+      } else {
+        syncRoutinesToSupabase(loadedRoutines);
+      }
+    });
   }, []);
 
   // Sync active workout to local storage
@@ -188,12 +199,14 @@ export default function Home() {
   const handleSaveRoutines = (updated: RoutinePreset[]) => {
     setRoutines(updated);
     saveLocalRoutines(updated);
+    syncRoutinesToSupabase(updated);
   };
 
   // Reset Routines to Default
   const handleResetRoutines = () => {
     const def = resetLocalRoutines();
     setRoutines(def);
+    syncRoutinesToSupabase(def);
   };
 
   // Add exercise to active workout

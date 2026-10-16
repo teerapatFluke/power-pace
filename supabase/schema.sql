@@ -63,20 +63,31 @@ CREATE POLICY "Public access workout_exercises" ON workout_exercises FOR ALL USI
 DROP POLICY IF EXISTS "Public access exercise_sets" ON exercise_sets;
 CREATE POLICY "Public access exercise_sets" ON exercise_sets FOR ALL USING (true) WITH CHECK (true);
 
--- Insert Default Exercises (Preloaded with both Pin and Free-weight exercises)
+-- Insert User's Weekly Routine Exercises
 INSERT INTO exercises (name, category, unit_type) VALUES
-  ('Lat Pulldown (ดึงหลัง)', 'Back', 'pin'),
-  ('Seated Cable Row (เคเบิลงัดหลัง)', 'Back', 'pin'),
-  ('Chest Press Machine (เครื่องดันอก)', 'Chest', 'pin'),
-  ('Leg Extension (เตะขาหน้า)', 'Legs', 'pin'),
-  ('Leg Curl (ดึงขาหลัง)', 'Legs', 'pin'),
-  ('Cable Triceps Pushdown', 'Arms', 'pin'),
-  ('Dumbbell Bench Press', 'Chest', 'kg'),
-  ('Incline Dumbbell Press', 'Chest', 'kg'),
-  ('Dumbbell Biceps Curl', 'Arms', 'kg'),
-  ('Dumbbell Lateral Raise (ยกข้าง)', 'Shoulders', 'kg'),
-  ('Dumbbell Shoulder Press', 'Shoulders', 'kg'),
-  ('Barbell Squat', 'Legs', 'kg'),
-  ('Barbell Deadlift', 'Back', 'kg'),
-  ('Pull-ups (โหนบาร์)', 'Back', 'bodyweight')
+  -- จันทร์ (Push)
+  ('Chest Press Machine (อกกลาง)', 'Chest', 'pin'),
+  ('Incline Dumbbell Press (อกบน)', 'Chest', 'kg'),
+  ('Shoulder Press Machine (ไหล่หน้า)', 'Shoulders', 'pin'),
+  ('Lateral Raise (ไหล่ข้าง)', 'Shoulders', 'kg'),
+  ('Triceps Pressdown (หลังแขน)', 'Arms', 'pin'),
+
+  -- อังคาร (Pull)
+  ('Lat Pulldown (หลังปีก/กว้าง)', 'Back', 'pin'),
+  ('Mid Row Machine (หลังสะบัก/หนา)', 'Back', 'pin'),
+  ('Rear Delt Fly (ไหล่หลัง)', 'Shoulders', 'pin'),
+  ('Bicep Curl (หน้าแขน)', 'Arms', 'kg'),
+  ('Hammer Curl (ลำแขน)', 'Arms', 'kg'),
+
+  -- พุธ (Legs)
+  ('Leg Press (ขารวม/ก้น)', 'Legs', 'kg'),
+  ('Leg Extension (หน้าขา)', 'Legs', 'pin'),
+  ('Lying Leg Curl (หลังขา)', 'Legs', 'pin'),
+  ('Calf Raises (น่อง)', 'Legs', 'kg'),
+  ('Ab Crunch Machine (หน้าท้อง)', 'Core', 'pin'),
+
+  -- ศุกร์ (Upper) / เสาร์ (Lower)
+  ('Incline Chest Press (เน้นอกบน)', 'Chest', 'pin'),
+  ('Bicep Curl / Triceps Pressdown (สลับเล่น)', 'Arms', 'pin')
 ON CONFLICT DO NOTHING;
+

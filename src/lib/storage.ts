@@ -1,10 +1,34 @@
 import { Exercise, WorkoutSession } from '@/types/workout';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { DEFAULT_EXERCISES } from './defaultExercises';
+import { WORKOUT_ROUTINES, RoutinePreset } from './workoutRoutines';
 
 const ACTIVE_WORKOUT_KEY = 'power_pace_active_workout';
 const HISTORY_KEY = 'power_pace_workout_history';
 const CUSTOM_EXERCISES_KEY = 'power_pace_custom_exercises';
+const ROUTINES_KEY = 'power_pace_routines';
+
+export function getLocalRoutines(): RoutinePreset[] {
+  if (typeof window === 'undefined') return WORKOUT_ROUTINES;
+  const raw = localStorage.getItem(ROUTINES_KEY);
+  if (!raw) return WORKOUT_ROUTINES;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return WORKOUT_ROUTINES;
+  }
+}
+
+export function saveLocalRoutines(routines: RoutinePreset[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(ROUTINES_KEY, JSON.stringify(routines));
+}
+
+export function resetLocalRoutines(): RoutinePreset[] {
+  if (typeof window === 'undefined') return WORKOUT_ROUTINES;
+  localStorage.removeItem(ROUTINES_KEY);
+  return WORKOUT_ROUTINES;
+}
 
 // --- Local Storage Helpers ---
 export function getLocalActiveWorkout(): WorkoutSession | null {

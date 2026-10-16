@@ -15,8 +15,12 @@ import {
   RotateCcw,
   Activity,
   Flame,
+  Settings,
+  ChevronRight,
+  Edit3,
 } from 'lucide-react';
 import { Exercise, WorkoutSession, WorkoutExercise, ExerciseSet } from '@/types/workout';
+import { RoutinePreset } from '@/lib/workoutRoutines';
 import {
   getLocalActiveWorkout,
   setLocalActiveWorkout,
@@ -27,6 +31,9 @@ import {
   findLastPerformance,
   syncWorkoutToSupabase,
   testSupabaseConnection,
+  getLocalRoutines,
+  saveLocalRoutines,
+  resetLocalRoutines,
 } from '@/lib/storage';
 import ExerciseCard from '@/components/ExerciseCard';
 import AddExerciseModal from '@/components/AddExerciseModal';
@@ -34,15 +41,20 @@ import RestTimer from '@/components/RestTimer';
 import WorkoutSummaryModal from '@/components/WorkoutSummaryModal';
 import HistoryModal from '@/components/HistoryModal';
 import SqlModal from '@/components/SqlModal';
+import RoutineManagerModal from '@/components/RoutineManagerModal';
 
 export default function Home() {
   // App State
   const [activeWorkout, setActiveWorkout] = useState<WorkoutSession | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [routines, setRoutines] = useState<RoutinePreset[]>([]);
   const [history, setHistory] = useState<WorkoutSession[]>([]);
+
+  // Modals
   const [isAddExerciseOpen, setIsAddExerciseOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
+  const [isRoutineManagerOpen, setIsRoutineManagerOpen] = useState(false);
   const [finishedWorkout, setFinishedWorkout] = useState<WorkoutSession | null>(null);
   const [lastSyncSuccess, setLastSyncSuccess] = useState(false);
 
@@ -63,6 +75,9 @@ export default function Home() {
   useEffect(() => {
     const loadedExercises = getLocalExercises();
     setExercises(loadedExercises);
+
+    const loadedRoutines = getLocalRoutines();
+    setRoutines(loadedRoutines);
 
     const loadedHistory = getLocalWorkoutHistory();
     setHistory(loadedHistory);
@@ -104,7 +119,7 @@ export default function Home() {
     };
   }, [Boolean(activeWorkout)]);
 
-  // Start new workout
+  // Start new empty workout
   const handleStartWorkout = (title = 'คอร์สเวทเทรนนิ่ง') => {
     const today = new Date().toISOString().split('T')[0];
     const newSession: WorkoutSession = {
@@ -117,6 +132,68 @@ export default function Home() {
     };
     setActiveWorkout(newSession);
     setLocalActiveWorkout(newSession);
+  };
+
+  // Start workout from a preset routine day
+  const handleStartRoutine = (routine: RoutinePreset) => {
+    const today = new Date().toISOString().split('T')[0];
+    const loadedExercises = exercises.length > 0 ? exercises : getLocalExercises();
+
+    const initialExercises: WorkoutExercise[] = routine.exerciseIds
+      .map((exId, idx) => {
+        const exercise = loadedExercises.find((e) => e.id === exId);
+        if (!exercise) return null;
+        const lastPerf = findLastPerformance(exercise.id, exercise.name);
+        const initialWeight = lastPerf
+          ? lastPerf.weight_or_pin
+          : exercise.unit_type === 'pin'
+          ? 4
+          : 15;
+        const initialReps = lastPerf ? lastPerf.reps : 10;
+
+        return {
+          id: `we-${Date.now()}-${idx}`,
+          exercise_id: exercise.id,
+          exercise_name: exercise.name,
+          category: exercise.category,
+          unit_type: exercise.unit_type,
+          previous_performance: lastPerf || undefined,
+          sets: [
+            {
+              id: `set-${Date.now()}-${idx}-1`,
+              set_number: 1,
+              weight_or_pin: initialWeight,
+              reps: initialReps,
+              is_completed: false,
+            },
+          ],
+        };
+      })
+      .filter(Boolean) as WorkoutExercise[];
+
+    const newSession: WorkoutSession = {
+      id: `workout-${Date.now()}`,
+      title: routine.name,
+      date: today,
+      duration_seconds: 0,
+      exercises: initialExercises,
+      is_completed: false,
+    };
+
+    setActiveWorkout(newSession);
+    setLocalActiveWorkout(newSession);
+  };
+
+  // Save / Update Routines
+  const handleSaveRoutines = (updated: RoutinePreset[]) => {
+    setRoutines(updated);
+    saveLocalRoutines(updated);
+  };
+
+  // Reset Routines to Default
+  const handleResetRoutines = () => {
+    const def = resetLocalRoutines();
+    setRoutines(def);
   };
 
   // Add exercise to active workout
@@ -391,6 +468,16 @@ export default function Home() {
           <div className="flex items-center space-x-2">
             <button
               type="button"
+              onClick={() => setIsRoutineManagerOpen(true)}
+              className="p-2.5 rounded-xl bg-[#121721] hover:bg-[#1a2130] border border-white/5 text-gray-300 hover:text-white transition flex items-center gap-1 text-xs font-semibold"
+              title="จัดการตารางเล่น"
+            >
+              <Calendar className="w-4 h-4 text-emerald-400" />
+              <span className="hidden sm:inline">ตารางเล่น</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setIsHistoryOpen(true)}
               className="p-2.5 rounded-xl bg-[#121721] hover:bg-[#1a2130] border border-white/5 text-gray-300 hover:text-white transition flex items-center gap-1 text-xs font-semibold"
               title="ประวัติการเล่น"
@@ -464,27 +551,66 @@ export default function Home() {
           </div>
         ) : (
           /* Empty / Start Workout Hero */
-          <div className="bg-[#121721] rounded-3xl p-6 border border-white/5 text-center space-y-4 shadow-xl">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-              <Flame className="w-8 h-8 animate-pulse text-emerald-400" />
+          <div className="bg-[#121721] rounded-3xl p-5 border border-white/5 text-center space-y-4 shadow-xl">
+            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+              <div className="flex items-center gap-2">
+                <Flame className="w-5 h-5 text-emerald-400 animate-pulse" />
+                <h2 className="text-base font-black text-white">
+                  ตารางฝึกซ้อมประจำสัปดาห์
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRoutineManagerOpen(true)}
+                className="text-xs font-bold text-emerald-400 hover:underline flex items-center gap-1"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                แก้ไขตาราง
+              </button>
             </div>
 
-            <div className="space-y-1">
-              <h2 className="text-xl font-black text-white">พร้อมเริ่มเล่นเวทหรือยัง?</h2>
-              <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                รองรับทั้ง Machine นับตามเบอร์แผ่น และ Free Weight เป็นกิโลกรัม
-                พร้อมระบบ Progressive Overload ปรับน้ำหนักอัตโนมัติ
-              </p>
+            {/* Preset Routine Cards List */}
+            <div className="space-y-2 text-left">
+              {routines.map((routine) => (
+                <div
+                  key={routine.id}
+                  className="p-3 rounded-2xl bg-[#161d2a] hover:bg-[#1b2536] border border-white/5 transition flex items-center justify-between"
+                >
+                  <div className="flex-1 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-sm text-white">
+                        {routine.name}
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 text-gray-400">
+                        {routine.exerciseIds.length} ท่า
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-400 truncate mt-0.5">
+                      {routine.focus}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleStartRoutine(routine)}
+                    className="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs flex items-center gap-1 shadow-md shadow-emerald-500/20 active:scale-95 transition"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-black" />
+                    เริ่มเล่น
+                  </button>
+                </div>
+              ))}
             </div>
 
+            {/* Custom Empty Workout button */}
             <div className="pt-2">
               <button
                 type="button"
-                onClick={() => handleStartWorkout('คอร์สวันนี้ (Push / Pull / Legs)')}
-                className="w-full py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm tracking-wide shadow-lg shadow-emerald-500/25 transition active:scale-95 flex items-center justify-center gap-2"
+                onClick={() => handleStartWorkout('คอร์สอิสระ (Custom Workout)')}
+                className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-300 font-bold text-xs tracking-wide transition border border-white/5 flex items-center justify-center gap-1.5"
               >
-                <Play className="w-4 h-4 fill-black" />
-                เริ่มเซสชันใหม่ (Start Workout)
+                <Plus className="w-4 h-4 text-emerald-400" />
+                สร้างเซสชันเปล่า (เลือกท่าเอง)
               </button>
             </div>
           </div>
@@ -565,6 +691,16 @@ export default function Home() {
       />
 
       {/* Modals */}
+      <RoutineManagerModal
+        isOpen={isRoutineManagerOpen}
+        routines={routines}
+        allExercises={exercises}
+        onClose={() => setIsRoutineManagerOpen(false)}
+        onSaveRoutines={handleSaveRoutines}
+        onStartRoutine={handleStartRoutine}
+        onResetToDefault={handleResetRoutines}
+      />
+
       <AddExerciseModal
         isOpen={isAddExerciseOpen}
         exercises={exercises}

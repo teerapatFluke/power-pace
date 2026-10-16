@@ -591,6 +591,33 @@ export default function Home() {
   const openExerciseId =
     expandedExerciseId === undefined ? autoExpandedId : expandedExerciseId;
 
+  // Helper to check if routine matches current day of the week
+  const isTodayRoutine = (routine: RoutinePreset) => {
+    const todayIndex = new Date().getDay(); // 0: Sun, 1: Mon, 2: Tue, 3: Wed, 4: Thu, 5: Fri, 6: Sat
+    const dayKeywords: Record<number, string[]> = {
+      0: ['อาทิตย์', 'sunday', 'sun'],
+      1: ['จันทร์', 'monday', 'mon'],
+      2: ['อังคาร', 'tuesday', 'tue'],
+      3: ['พุธ', 'wednesday', 'wed'],
+      4: ['พฤหัส', 'พฤหัสบดี', 'thursday', 'thu'],
+      5: ['ศุกร์', 'friday', 'fri'],
+      6: ['เสาร์', 'saturday', 'sat'],
+    };
+
+    const targets = dayKeywords[todayIndex] || [];
+    const text = `${routine.day} ${routine.name} ${routine.id}`.toLowerCase();
+    return targets.some((k) => text.includes(k));
+  };
+
+  // Sort routines so today's routine always appears at the very top!
+  const sortedRoutines = [...routines].sort((a, b) => {
+    const aIsToday = isTodayRoutine(a);
+    const bIsToday = isTodayRoutine(b);
+    if (aIsToday && !bIsToday) return -1;
+    if (!aIsToday && bIsToday) return 1;
+    return 0;
+  });
+
   return (
     <main className="min-h-screen bg-concrete text-ink pb-32">
       {/* App bar */}
@@ -696,28 +723,48 @@ export default function Home() {
               </button>
             </div>
 
-            <ul className="bg-paper rounded-lg border border-rule divide-y divide-rule">
-              {routines.map((routine) => (
-                <li key={routine.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-ink">{routine.name}</div>
-                    <div className="text-sm text-mute truncate">
-                      {routine.focus}
-                      <span className="text-faint">
-                        {', '}
-                        <span className="num">{routine.exerciseIds.length}</span> ท่า
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleStartRoutine(routine)}
-                    className="shrink-0 px-4 py-2 rounded-md bg-plate-blue hover:bg-plate-blue-dark text-white text-sm font-semibold transition-colors"
+            <ul className="bg-paper rounded-lg border border-rule divide-y divide-rule overflow-hidden">
+              {sortedRoutines.map((routine) => {
+                const isToday = isTodayRoutine(routine);
+
+                return (
+                  <li
+                    key={routine.id}
+                    className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${
+                      isToday ? 'bg-well/50 ring-1 ring-inset ring-plate-blue/20' : ''
+                    }`}
                   >
-                    เริ่ม
-                  </button>
-                </li>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-ink text-base">{routine.name}</span>
+                        {isToday && (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-plate-blue text-white tracking-wide shadow-xs">
+                            วันนี้
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-mute truncate mt-0.5">
+                        {routine.focus}
+                        <span className="text-faint">
+                          {', '}
+                          <span className="num">{routine.exerciseIds.length}</span> ท่า
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleStartRoutine(routine)}
+                      className={`shrink-0 px-4 py-2 rounded-md font-semibold text-sm transition-all ${
+                        isToday
+                          ? 'bg-plate-blue hover:bg-plate-blue-dark text-white shadow-sm'
+                          : 'bg-well hover:bg-rule/70 text-ink'
+                      }`}
+                    >
+                      เริ่ม
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
 
             <button

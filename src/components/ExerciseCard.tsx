@@ -14,6 +14,7 @@ interface ExerciseCardProps {
   onToggleCompleteSet: (setId: string) => void;
   onDeleteSet: (setId: string) => void;
   onApplyProgressiveSet: () => void;
+  onApplyPreviousPerformance?: () => void;
 }
 
 export default function ExerciseCard({
@@ -25,6 +26,7 @@ export default function ExerciseCard({
   onToggleCompleteSet,
   onDeleteSet,
   onApplyProgressiveSet,
+  onApplyPreviousPerformance,
 }: ExerciseCardProps) {
   const completedCount = exercise.sets.filter((s) => s.is_completed).length;
 
@@ -53,17 +55,19 @@ export default function ExerciseCard({
             </span>
 
             {exercise.previous_performance ? (
-              <span
-                className="text-amber-400 font-medium flex items-center gap-1"
-                title={`สถิติคราวก่อนเฉพาะที่สาขานี้`}
+              <button
+                type="button"
+                onClick={onApplyPreviousPerformance}
+                className="text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 active:scale-95 transition text-left cursor-pointer"
+                title="แตะเพื่อใส่ค่าน้ำหนักนี้ลงในเซ็ต (สถิติคราวก่อนเฉพาะที่สาขานี้)"
               >
                 <span>⚡ คราวก่อนที่นี่:</span>
-                <span className="font-bold">
+                <span className="font-bold underline decoration-dotted underline-offset-2">
                   {exercise.previous_performance.weight_or_pin}{' '}
                   {exercise.previous_performance.unit_type === 'pin' ? 'แผ่น' : 'kg'} ×{' '}
                   {exercise.previous_performance.reps} ครั้ง
                 </span>
-              </span>
+              </button>
             ) : (
               <span className="text-gray-500 text-[11px] font-normal italic">
                 (ยังไม่มีสถิติที่สาขานี้)

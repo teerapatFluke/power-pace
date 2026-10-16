@@ -45,6 +45,7 @@ import {
   resetLocalRoutines,
   fetchRoutinesFromSupabase,
   syncRoutinesToSupabase,
+  fetchWorkoutHistoryFromSupabase,
   getLocalLocations,
   saveLocalLocations,
   getSelectedLocation,
@@ -114,7 +115,7 @@ export default function Home() {
       setActiveWorkout(active);
     }
 
-    // Check Supabase connection and fetch routines
+    // Check Supabase connection and fetch routines & history
     testSupabaseConnection().then((res) => setSupabaseStatus(res));
 
     fetchRoutinesFromSupabase().then((remoteRoutines) => {
@@ -123,6 +124,16 @@ export default function Home() {
         saveLocalRoutines(remoteRoutines);
       } else {
         syncRoutinesToSupabase(loadedRoutines);
+      }
+    });
+
+    fetchWorkoutHistoryFromSupabase().then((remoteHistory) => {
+      if (remoteHistory && remoteHistory.length > 0) {
+        setHistory(remoteHistory);
+        localStorage.setItem(
+          'power_pace_workout_history',
+          JSON.stringify(remoteHistory)
+        );
       }
     });
   }, []);
@@ -160,7 +171,7 @@ export default function Home() {
     setSelectedLocationState(loc);
     setSelectedLocation(loc);
 
-    // If an active workout is in progress, update its location tag AND re-calculate previous_performance for this new location!
+    // If an active workout is in progress, update location AND auto-update uncompleted sets to match the new gym's records!
     if (activeWorkout) {
       setActiveWorkout((prev) => {
         if (!prev) return null;
@@ -171,11 +182,33 @@ export default function Home() {
             loc.id,
             loc.name
           );
+
+          const targetWeight = lastPerf
+            ? lastPerf.weight_or_pin
+            : ex.unit_type === 'pin'
+            ? 4
+            : 15;
+          const targetReps = lastPerf ? lastPerf.reps : 10;
+
+          // Auto-update uncompleted sets to the new gym's weight/pin
+          const updatedSets = ex.sets.map((s) => {
+            if (!s.is_completed) {
+              return {
+                ...s,
+                weight_or_pin: targetWeight,
+                reps: targetReps,
+              };
+            }
+            return s;
+          });
+
           return {
             ...ex,
             previous_performance: lastPerf || undefined,
+            sets: updatedSets,
           };
         });
+
         return {
           ...prev,
           location_id: loc.id,
@@ -807,6 +840,20 @@ export default function Home() {
                     }
                     onDeleteSet={(setId) => handleDeleteSet(ex.id, setId)}
                     onApplyProgressiveSet={() => handleApplyProgressiveSet(ex.id)}
+                    onApplyPreviousPerformance={() => {
+                      if (!currentGymPerf) return;
+                      const updatedSets = ex.sets.map((s) => {
+                        if (!s.is_completed) {
+                          return {
+                            ...s,
+                            weight_or_pin: currentGymPerf.weight_or_pin,
+                            reps: currentGymPerf.reps,
+                          };
+                        }
+                        return s;
+                      });
+                      handleUpdateExercise(ex.id, { sets: updatedSets });
+                    }}
                   />
                 );
               })

@@ -1,4 +1,4 @@
-import { Exercise, WorkoutSession, GymLocation } from '@/types/workout';
+import { Exercise, WorkoutSession, WorkoutExercise, GymLocation } from '@/types/workout';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { DEFAULT_EXERCISES } from './defaultExercises';
 import { WORKOUT_ROUTINES, RoutinePreset } from './workoutRoutines';
@@ -284,6 +284,72 @@ export async function syncWorkoutToSupabase(workout: WorkoutSession): Promise<{ 
     const message = err instanceof Error ? err.message : String(err);
     console.warn('Supabase sync warning:', message);
     return { success: false, error: message };
+  }
+}
+
+// Fetch Workout History from Supabase
+export async function fetchWorkoutHistoryFromSupabase(): Promise<WorkoutSession[] | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const { data: workoutsData, error: wError } = await supabase
+      .from('workouts')
+      .select('id, title, date, duration_seconds, location_name, created_at')
+      .order('date', { ascending: false });
+
+    if (wError || !workoutsData || workoutsData.length === 0) return null;
+
+    const sessions: WorkoutSession[] = [];
+
+    for (const w of workoutsData) {
+      const { data: weData } = await supabase
+        .from('workout_exercises')
+        .select('*')
+        .eq('workout_id', w.id)
+        .order('order_index', { ascending: true });
+
+      const exercises: WorkoutExercise[] = [];
+
+      if (weData) {
+        for (const we of weData) {
+          const { data: setsData } = await supabase
+            .from('exercise_sets')
+            .select('*')
+            .eq('workout_exercise_id', we.id)
+            .order('set_number', { ascending: true });
+
+          exercises.push({
+            id: we.id,
+            exercise_id: we.id,
+            exercise_name: we.exercise_name,
+            category: we.category,
+            unit_type: we.unit_type,
+            sets: (setsData || []).map((s) => ({
+              id: s.id,
+              set_number: s.set_number,
+              weight_or_pin: Number(s.weight_or_pin),
+              reps: Number(s.reps),
+              is_completed: Boolean(s.is_completed),
+              rpe: s.rpe ? Number(s.rpe) : undefined,
+            })),
+          });
+        }
+      }
+
+      sessions.push({
+        id: w.id,
+        title: w.title,
+        date: w.date,
+        duration_seconds: w.duration_seconds,
+        location_name: w.location_name || undefined,
+        exercises,
+        is_completed: true,
+      });
+    }
+
+    return sessions;
+  } catch (err) {
+    console.warn('Error fetching history from Supabase:', err);
+    return null;
   }
 }
 

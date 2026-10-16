@@ -160,14 +160,27 @@ export default function Home() {
     setSelectedLocationState(loc);
     setSelectedLocation(loc);
 
-    // If an active workout is in progress, update its location tag as well
+    // If an active workout is in progress, update its location tag AND re-calculate previous_performance for this new location!
     if (activeWorkout) {
       setActiveWorkout((prev) => {
         if (!prev) return null;
+        const updatedExercises = prev.exercises.map((ex) => {
+          const lastPerf = findLastPerformance(
+            ex.exercise_id,
+            ex.exercise_name,
+            loc.id,
+            loc.name
+          );
+          return {
+            ...ex,
+            previous_performance: lastPerf || undefined,
+          };
+        });
         return {
           ...prev,
           location_id: loc.id,
           location_name: loc.name,
+          exercises: updatedExercises,
         };
       });
     }
@@ -219,7 +232,8 @@ export default function Home() {
         const lastPerf = findLastPerformance(
           exercise.id,
           exercise.name,
-          selectedLocation.id
+          selectedLocation.id,
+          selectedLocation.name
         );
         const initialWeight = lastPerf
           ? lastPerf.weight_or_pin
@@ -286,7 +300,8 @@ export default function Home() {
     const lastPerf = findLastPerformance(
       exercise.id,
       exercise.name,
-      selectedLocation.id
+      selectedLocation.id,
+      selectedLocation.name
     );
 
     const initialWeight = lastPerf
@@ -518,6 +533,14 @@ export default function Home() {
     setFinishedWorkout(completedWorkout);
   };
 
+  // Discard current workout
+  const handleDiscardWorkout = () => {
+    if (confirm('ต้องการยกเลิกและรีเซ็ตการฝึกซ้อมรอบนี้ใช่หรือไม่?')) {
+      setActiveWorkout(null);
+      setLocalActiveWorkout(null);
+    }
+  };
+
   // Format workout time
   const formatWorkoutDuration = (secs: number) => {
     const mins = Math.floor(secs / 60);
@@ -623,12 +646,19 @@ export default function Home() {
                 </h2>
               </div>
 
-              {/* Timer & Finish button */}
+              {/* Timer & Discard button */}
               <div className="text-right">
                 <div className="text-xs text-gray-400 font-medium">เวลาที่ผ่านไป</div>
                 <div className="text-2xl font-black font-mono text-emerald-400">
                   {formatWorkoutDuration(activeWorkout.duration_seconds)}
                 </div>
+                <button
+                  type="button"
+                  onClick={handleDiscardWorkout}
+                  className="text-[11px] text-red-400/70 hover:text-red-400 hover:underline mt-0.5"
+                >
+                  ยกเลิกเซสชัน
+                </button>
               </div>
             </div>
 
@@ -751,23 +781,35 @@ export default function Home() {
                 </button>
               </div>
             ) : (
-              activeWorkout.exercises.map((ex) => (
-                <ExerciseCard
-                  key={ex.id}
-                  exercise={ex}
-                  onUpdateExercise={(updates) => handleUpdateExercise(ex.id, updates)}
-                  onRemoveExercise={() => handleRemoveExercise(ex.id)}
-                  onAddSet={() => handleAddSet(ex.id)}
-                  onUpdateSet={(setId, updates) =>
-                    handleUpdateSet(ex.id, setId, updates)
-                  }
-                  onToggleCompleteSet={(setId) =>
-                    handleToggleCompleteSet(ex.id, setId)
-                  }
-                  onDeleteSet={(setId) => handleDeleteSet(ex.id, setId)}
-                  onApplyProgressiveSet={() => handleApplyProgressiveSet(ex.id)}
-                />
-              ))
+              activeWorkout.exercises.map((ex) => {
+                const currentGymPerf = findLastPerformance(
+                  ex.exercise_id,
+                  ex.exercise_name,
+                  selectedLocation.id,
+                  selectedLocation.name
+                );
+
+                return (
+                  <ExerciseCard
+                    key={ex.id}
+                    exercise={{
+                      ...ex,
+                      previous_performance: currentGymPerf || undefined,
+                    }}
+                    onUpdateExercise={(updates) => handleUpdateExercise(ex.id, updates)}
+                    onRemoveExercise={() => handleRemoveExercise(ex.id)}
+                    onAddSet={() => handleAddSet(ex.id)}
+                    onUpdateSet={(setId, updates) =>
+                      handleUpdateSet(ex.id, setId, updates)
+                    }
+                    onToggleCompleteSet={(setId) =>
+                      handleToggleCompleteSet(ex.id, setId)
+                    }
+                    onDeleteSet={(setId) => handleDeleteSet(ex.id, setId)}
+                    onApplyProgressiveSet={() => handleApplyProgressiveSet(ex.id)}
+                  />
+                );
+              })
             )}
 
             {/* Bottom buttons inside active workout */}

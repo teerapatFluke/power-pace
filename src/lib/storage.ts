@@ -191,60 +191,44 @@ export function saveLocalCustomExercise(exercise: Exercise) {
   localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(custom));
 }
 
-// Find previous performance for an exercise (prioritizing the current gym location)
+// Find previous performance for an exercise (STRICTLY isolated to the current gym location only)
 export function findLastPerformance(
   exerciseId: string,
   exerciseName: string,
-  currentLocationId?: string
+  currentLocationId?: string,
+  currentLocationName?: string
 ) {
   const history = getLocalWorkoutHistory();
 
-  // 1. Try finding in the CURRENT gym location first
-  if (currentLocationId) {
-    for (const session of history) {
-      if (session.location_id === currentLocationId) {
-        const match = session.exercises.find(
-          (e) => e.exercise_id === exerciseId || e.exercise_name === exerciseName
-        );
-        if (match && match.sets.length > 0) {
-          const completedSets = match.sets.filter((s) => s.is_completed);
-          const targetSet =
-            completedSets.length > 0
-              ? completedSets[completedSets.length - 1]
-              : match.sets[0];
-          return {
-            weight_or_pin: targetSet.weight_or_pin,
-            reps: targetSet.reps,
-            unit_type: match.unit_type,
-            location_name: session.location_name,
-            is_from_current_location: true,
-          };
-        }
+  if (!currentLocationId && !currentLocationName) return null;
+
+  for (const session of history) {
+    const isSameLocation =
+      (currentLocationId && session.location_id === currentLocationId) ||
+      (currentLocationName && session.location_name === currentLocationName);
+
+    if (isSameLocation) {
+      const match = session.exercises.find(
+        (e) => e.exercise_id === exerciseId || e.exercise_name === exerciseName
+      );
+      if (match && match.sets.length > 0) {
+        const completedSets = match.sets.filter((s) => s.is_completed);
+        const targetSet =
+          completedSets.length > 0
+            ? completedSets[completedSets.length - 1]
+            : match.sets[0];
+        return {
+          weight_or_pin: targetSet.weight_or_pin,
+          reps: targetSet.reps,
+          unit_type: match.unit_type,
+          location_name: session.location_name,
+          is_from_current_location: true,
+        };
       }
     }
   }
 
-  // 2. If not found in current gym, look in other gyms (so user still has a baseline reference)
-  for (const session of history) {
-    const match = session.exercises.find(
-      (e) => e.exercise_id === exerciseId || e.exercise_name === exerciseName
-    );
-    if (match && match.sets.length > 0) {
-      const completedSets = match.sets.filter((s) => s.is_completed);
-      const targetSet =
-        completedSets.length > 0
-          ? completedSets[completedSets.length - 1]
-          : match.sets[0];
-      return {
-        weight_or_pin: targetSet.weight_or_pin,
-        reps: targetSet.reps,
-        unit_type: match.unit_type,
-        location_name: session.location_name,
-        is_from_current_location: false,
-      };
-    }
-  }
-
+  // Strictly isolated: do NOT leak plate numbers from other gyms!
   return null;
 }
 

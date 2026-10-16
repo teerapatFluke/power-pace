@@ -52,27 +52,21 @@ export default function ExerciseCard({
               {exercise.category}
             </span>
 
-            {exercise.previous_performance && (
+            {exercise.previous_performance ? (
               <span
-                className={`font-medium flex items-center gap-1 ${
-                  exercise.previous_performance.is_from_current_location
-                    ? 'text-amber-400/90'
-                    : 'text-sky-400/90'
-                }`}
-                title={
-                  exercise.previous_performance.is_from_current_location
-                    ? 'สถิติล่าสุดจากสถานที่นี้'
-                    : `สถิติล่าสุดจาก: ${exercise.previous_performance.location_name || 'ที่อื่น'}`
-                }
+                className="text-amber-400 font-medium flex items-center gap-1"
+                title={`สถิติคราวก่อนเฉพาะที่สาขานี้`}
               >
-                <span>
-                  ⚡ {exercise.previous_performance.is_from_current_location ? 'คราวก่อน' : `เคยเล่นที่ ${exercise.previous_performance.location_name || 'อื่น'}`}:
-                </span>
+                <span>⚡ คราวก่อนที่นี่:</span>
                 <span className="font-bold">
                   {exercise.previous_performance.weight_or_pin}{' '}
                   {exercise.previous_performance.unit_type === 'pin' ? 'แผ่น' : 'kg'} ×{' '}
                   {exercise.previous_performance.reps} ครั้ง
                 </span>
+              </span>
+            ) : (
+              <span className="text-gray-500 text-[11px] font-normal italic">
+                (ยังไม่มีสถิติที่สาขานี้)
               </span>
             )}
           </div>

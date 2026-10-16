@@ -1,9 +1,17 @@
 -- ==========================================
--- POWER PACE: INSERT POPULAR GYM EXERCISES (68 ท่ายอดฮิต)
+-- POWER PACE: FIX DUPLICATES & INSERT 68 POPULAR EXERCISES
 -- Run this in your Supabase Dashboard -> SQL Editor -> Run
 -- ==========================================
 
--- 1. เพิ่ม UNIQUE constraint ให้กับชื่อท่า (ถ้ายังไม่มี) เพื่อกันข้อมูลซ้ำเมื่อรันหลายรอบ
+-- 1. ลบรายการท่าที่มีชื่อซ้ำกันออก ให้เหลือไว้เพียงแถวเดียว
+DELETE FROM exercises
+WHERE id NOT IN (
+  SELECT DISTINCT ON (name) id
+  FROM exercises
+  ORDER BY name, created_at DESC
+);
+
+-- 2. สร้าง UNIQUE constraint ป้องกันชื่อซ้ำในอนาคต
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -13,11 +21,9 @@ BEGIN
   END IF;
 END $$;
 
--- 2. เพิ่มรายการ 68 ท่าออกกำลังกายยอดฮิต (เครื่อง Machine แผ่นที่ + Free Weight kg)
+-- 3. นำเข้าและอัปเดต 68 ท่ายอดฮิต
 INSERT INTO exercises (name, category, unit_type) VALUES
-  -- ----------------------------------------------------
-  -- อก (CHEST)
-  -- ----------------------------------------------------
+  -- อก (Chest)
   ('Chest Press Machine (อกกลางเครื่อง)', 'Chest', 'pin'),
   ('Incline Chest Press (อกบนเครื่อง)', 'Chest', 'pin'),
   ('Incline Dumbbell Press (ดัมเบลอกบน)', 'Chest', 'kg'),
@@ -31,9 +37,7 @@ INSERT INTO exercises (name, category, unit_type) VALUES
   ('Chest Dips (ดิปส์อก)', 'Chest', 'bodyweight'),
   ('Push-ups (วิดพื้น)', 'Chest', 'bodyweight'),
 
-  -- ----------------------------------------------------
-  -- หลัง (BACK)
-  -- ----------------------------------------------------
+  -- หลัง (Back)
   ('Lat Pulldown (ดึงปีกกว้างเครื่อง)', 'Back', 'pin'),
   ('Mid Row Machine (ดึงสะบักเครื่อง)', 'Back', 'pin'),
   ('Seated Cable Row (เคเบิลงัดหลัง)', 'Back', 'pin'),
@@ -47,9 +51,7 @@ INSERT INTO exercises (name, category, unit_type) VALUES
   ('Assisted Pull-up (เครื่องช่วยโหนบาร์)', 'Back', 'pin'),
   ('Back Extension / Hyperextension (หลังล่าง)', 'Back', 'bodyweight'),
 
-  -- ----------------------------------------------------
-  -- ไหล่ (SHOULDERS)
-  -- ----------------------------------------------------
+  -- ไหล่ (Shoulders)
   ('Shoulder Press Machine (เครื่องดันไหล่)', 'Shoulders', 'pin'),
   ('Dumbbell Lateral Raise (ดัมเบลยกไหล่ข้าง)', 'Shoulders', 'kg'),
   ('Rear Delt Fly Machine (เครื่องไหล่หลัง)', 'Shoulders', 'pin'),
@@ -62,9 +64,7 @@ INSERT INTO exercises (name, category, unit_type) VALUES
   ('Dumbbell Shrug (ดัมเบลยักไหล่/ทราพีเซียส)', 'Shoulders', 'kg'),
   ('Barbell Shrug (บาร์เบลยักไหล่)', 'Shoulders', 'kg'),
 
-  -- ----------------------------------------------------
-  -- แขน (ARMS - หน้าแขน & หลังแขน)
-  -- ----------------------------------------------------
+  -- แขน (Arms)
   ('Triceps Pressdown (เคเบิลกดหลังแขน)', 'Arms', 'pin'),
   ('Dumbbell Bicep Curl (ดัมเบลหน้าแขน)', 'Arms', 'kg'),
   ('Hammer Curl (ดัมเบลแฮมเมอร์)', 'Arms', 'kg'),
@@ -78,9 +78,7 @@ INSERT INTO exercises (name, category, unit_type) VALUES
   ('Overhead Cable Triceps Extension (เคเบิลข้ามหัว)', 'Arms', 'pin'),
   ('Triceps Bench Dips (ดิปส์หลังแขน)', 'Arms', 'bodyweight'),
 
-  -- ----------------------------------------------------
-  -- ขาและก้น (LEGS & GLUTES)
-  -- ----------------------------------------------------
+  -- ขาและก้น (Legs & Glutes)
   ('Leg Press Machine (เครื่องเลกเพรส)', 'Legs', 'kg'),
   ('Leg Extension (เครื่องเตะหน้าขา)', 'Legs', 'pin'),
   ('Lying Leg Curl (เครื่องนอนพับขา)', 'Legs', 'pin'),
@@ -97,9 +95,7 @@ INSERT INTO exercises (name, category, unit_type) VALUES
   ('Hip Adductor Machine (เครื่องหุบขาหนีบ)', 'Legs', 'pin'),
   ('Seated Calf Raise (เครื่องนั่งเขย่งน่อง)', 'Legs', 'kg'),
 
-  -- ----------------------------------------------------
-  -- แกนกลาง / ท้อง (CORE / ABS)
-  -- ----------------------------------------------------
+  -- แกนกลาง / ท้อง (Core / Abs)
   ('Ab Crunch Machine (เครื่องซิทอัพหน้าท้อง)', 'Core', 'pin'),
   ('Cable Kneeling Crunch (เคเบิลคุกเข่าซิทอัพ)', 'Core', 'pin'),
   ('Hanging Leg Raise (โหนบาร์ยกขา)', 'Core', 'bodyweight'),

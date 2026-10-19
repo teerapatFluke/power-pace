@@ -9,6 +9,8 @@ import {
   Edit2,
   ArrowUp,
   ArrowDown,
+  ArrowUpDown,
+  GripVertical,
   Search,
   Layers,
   Dumbbell,
@@ -20,6 +22,7 @@ import {
   DAYS_OF_WEEK,
   PROGRAM_TEMPLATES,
   ProgramTemplate,
+  swapRoutineDays,
 } from '@/lib/workoutRoutines';
 import { Exercise, MuscleCategory } from '@/types/workout';
 import { findExerciseMatch, saveLocalCustomExercise } from '@/lib/storage';
@@ -82,6 +85,24 @@ export default function RoutineManagerModal({
   const [customExCategory, setCustomExCategory] = useState<MuscleCategory>('Chest');
   const [customExUnit, setCustomExUnit] = useState<'pin' | 'kg'>('pin');
   const [isSavingCustomEx, setIsSavingCustomEx] = useState(false);
+
+  // Drag and drop & swap states
+  const [draggingRoutineId, setDraggingRoutineId] = useState<string | null>(null);
+  const [dragOverRoutineId, setDragOverRoutineId] = useState<string | null>(null);
+  const [swappingTargetRoutine, setSwappingTargetRoutine] = useState<RoutinePreset | null>(null);
+  const [swapToast, setSwapToast] = useState<string | null>(null);
+
+  const handleSwapRoutines = (idA: string, idB: string) => {
+    if (idA === idB) return;
+    const routineA = routines.find((r) => r.id === idA);
+    const routineB = routines.find((r) => r.id === idB);
+    const updated = swapRoutineDays(routines, idA, idB);
+    onSaveRoutines(updated);
+    if (routineA && routineB) {
+      setSwapToast(`สลับวันเล่นสำเร็จ: ${routineA.day} ⇄ ${routineB.day}`);
+      setTimeout(() => setSwapToast(null), 3500);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -222,17 +243,91 @@ export default function RoutineManagerModal({
             </div>
           </div>
 
+          {/* Drag & Drop Reorder & Swap Hint */}
+          <div className="px-4 py-2 bg-well/40 border-b border-rule flex items-center justify-between text-xs text-mute">
+            <span className="flex items-center gap-1.5">
+              <GripVertical className="w-3.5 h-3.5 text-plate-blue shrink-0" />
+              <span>ลากการ์ดเพื่อสลับวัน หรือแตะปุ่ม <ArrowUpDown className="w-3 h-3 inline text-ink mx-0.5" /> เพื่อเลือกวันสลับ</span>
+            </span>
+            <span className="text-[11px] text-faint shrink-0">{routines.length} ตาราง</span>
+          </div>
+
+          {/* Swap Success Toast */}
+          {swapToast && (
+            <div className="mx-4 my-2 px-3 py-2 bg-plate-green/10 border border-plate-green/30 text-plate-green text-xs font-semibold rounded-md flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+              <Check className="w-4 h-4 shrink-0" />
+              <span>{swapToast}</span>
+            </div>
+          )}
+
           <div className="divide-y divide-rule border-b border-rule">
             {routines.map((routine) => {
               const isEditing = editingRoutineId === routine.id;
+              const isDragging = draggingRoutineId === routine.id;
+              const isDragOver = dragOverRoutineId === routine.id;
 
               return (
                 <div
                   key={routine.id}
-                  className={isEditing ? 'bg-well/50' : ''}
+                  draggable={!isEditing}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', routine.id);
+                    setDraggingRoutineId(routine.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggingRoutineId(null);
+                    setDragOverRoutineId(null);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (draggingRoutineId && draggingRoutineId !== routine.id) {
+                      setDragOverRoutineId(routine.id);
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverRoutineId === routine.id) {
+                      setDragOverRoutineId(null);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const srcId = e.dataTransfer.getData('text/plain') || draggingRoutineId;
+                    if (srcId && srcId !== routine.id) {
+                      handleSwapRoutines(srcId, routine.id);
+                    }
+                    setDraggingRoutineId(null);
+                    setDragOverRoutineId(null);
+                  }}
+                  className={`transition-all select-none ${
+                    isDragging
+                      ? 'opacity-30 border-2 border-dashed border-plate-blue'
+                      : isDragOver
+                      ? 'bg-plate-blue/10 ring-2 ring-plate-blue shadow-md'
+                      : isEditing
+                      ? 'bg-well/50'
+                      : 'hover:bg-well/30'
+                  }`}
                 >
+                  {/* Drop Notice Banner */}
+                  {isDragOver && (
+                    <div className="px-4 py-1.5 bg-plate-blue text-white text-xs font-semibold flex items-center justify-center gap-1.5 animate-pulse">
+                      <ArrowUpDown className="w-3.5 h-3.5" />
+                      <span>ปล่อยเพื่อสลับวันกับ &ldquo;{routine.day} ({routine.name})&rdquo;</span>
+                    </div>
+                  )}
+
                   {/* Routine Card Header */}
-                  <div className="px-4 py-3 flex items-center justify-between">
+                  <div className="px-4 py-3 flex items-center justify-between gap-2">
+                    {/* Drag Handle */}
+                    {!isEditing && (
+                      <div
+                        className="p-1 -ml-1 text-faint hover:text-ink cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+                        title="คลิกค้างแล้วลากเพื่อสลับวัน"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+                    )}
+
                     <div
                       className="flex-1 min-w-0 cursor-pointer"
                       onClick={() => setEditingRoutineId(isEditing ? null : routine.id)}
@@ -253,7 +348,7 @@ export default function RoutineManagerModal({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 ml-2">
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
                       {/* Start Routine Button */}
                       <button
                         type="button"
@@ -261,11 +356,22 @@ export default function RoutineManagerModal({
                           onStartRoutine(routine);
                           onClose();
                         }}
-                        className="px-3 py-1.5 rounded-md bg-plate-blue hover:bg-plate-blue-dark text-white font-semibold text-sm flex items-center gap-1"
+                        className="px-3 py-1.5 rounded-md bg-plate-blue hover:bg-plate-blue-dark text-white font-semibold text-sm flex items-center gap-1 shadow-2xs"
                         title="เริ่มเล่นตารางวันนี้"
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
                         เล่น
+                      </button>
+
+                      {/* Quick Swap Days Button */}
+                      <button
+                        type="button"
+                        onClick={() => setSwappingTargetRoutine(routine)}
+                        className="p-2 rounded-md text-mute hover:text-plate-blue hover:bg-well transition-colors"
+                        title="สลับวันกับตารางอื่น"
+                        aria-label="สลับวันกับตารางอื่น"
+                      >
+                        <ArrowUpDown className="w-4 h-4" />
                       </button>
 
                       {/* Edit Toggle */}
@@ -909,6 +1015,50 @@ export default function RoutineManagerModal({
           </Sheet>
         );
       })()}
+
+      {/* Quick Swap Routine Days Modal */}
+      {swappingTargetRoutine && (
+        <Sheet
+          title={`สลับวัน: ${swappingTargetRoutine.name}`}
+          description={`ปัจจุบันคือวัน${swappingTargetRoutine.day} — เลือกตารางที่ต้องการสลับวันด้วย:`}
+          onClose={() => setSwappingTargetRoutine(null)}
+          size="md"
+          stacked
+        >
+          <div className="p-4 space-y-2">
+            {routines
+              .filter((r) => r.id !== swappingTargetRoutine.id)
+              .map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => {
+                    handleSwapRoutines(swappingTargetRoutine.id, r.id);
+                    setSwappingTargetRoutine(null);
+                  }}
+                  className="w-full p-3.5 rounded-lg border border-rule hover:border-plate-blue hover:bg-well/70 flex items-center justify-between transition-all text-left group shadow-2xs"
+                >
+                  <div className="min-w-0 flex-1 mr-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-plate-blue bg-plate-blue/10 px-2 py-0.5 rounded-full shrink-0">
+                        วัน{r.day}
+                      </span>
+                      <span className="font-semibold text-ink text-sm group-hover:text-plate-blue transition-colors truncate">
+                        {r.name}
+                      </span>
+                    </div>
+                    <div className="text-xs text-mute mt-1 truncate">
+                      {r.focus} • <span className="num">{r.exerciseIds.length}</span> ท่า
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-full bg-well group-hover:bg-plate-blue group-hover:text-white text-mute transition-colors shrink-0">
+                    <ArrowUpDown className="w-4 h-4" />
+                  </div>
+                </button>
+              ))}
+          </div>
+        </Sheet>
+      )}
     </>
   );
 }

@@ -297,3 +297,57 @@ export const PROGRAM_TEMPLATES: ProgramTemplate[] = [
 
 // ค่าเริ่มต้นมาตรฐาน
 export const WORKOUT_ROUTINES: RoutinePreset[] = PUSH_PULL_LEGS_ROUTINES;
+
+/**
+ * สลับวันฝึกระหว่าง 2 ตาราง (Swap Routine Days)
+ * พร้อมอัปเดตชื่อตารางอัตโนมัติหากชื่อขึ้นต้นด้วยวันเดิม (เช่น "จันทร์ (Push)" -> "พุธ (Push)")
+ */
+export function swapRoutineDays(
+  routines: RoutinePreset[],
+  routineIdA: string,
+  routineIdB: string
+): RoutinePreset[] {
+  const indexA = routines.findIndex((r) => r.id === routineIdA);
+  const indexB = routines.findIndex((r) => r.id === routineIdB);
+  if (indexA === -1 || indexB === -1 || indexA === indexB) return routines;
+
+  const routineA = routines[indexA];
+  const routineB = routines[indexB];
+
+  const updateNameWithNewDay = (oldName: string, oldDay: string, newDay: string): string => {
+    const patterns = [
+      new RegExp(`^วัน${oldDay}\\s*`, 'i'),
+      new RegExp(`^${oldDay}\\s*`, 'i'),
+    ];
+    for (const pattern of patterns) {
+      if (pattern.test(oldName)) {
+        return oldName.replace(pattern, (match) => {
+          return match.startsWith('วัน') ? `วัน${newDay} ` : `${newDay} `;
+        }).trim();
+      }
+    }
+    return oldName;
+  };
+
+  const newNameA = updateNameWithNewDay(routineA.name, routineA.day, routineB.day);
+  const newNameB = updateNameWithNewDay(routineB.name, routineB.day, routineA.day);
+
+  const updatedA: RoutinePreset = {
+    ...routineA,
+    day: routineB.day,
+    name: newNameA,
+  };
+
+  const updatedB: RoutinePreset = {
+    ...routineB,
+    day: routineA.day,
+    name: newNameB,
+  };
+
+  const newRoutines = [...routines];
+  newRoutines[indexA] = updatedB;
+  newRoutines[indexB] = updatedA;
+
+  return newRoutines;
+}
+

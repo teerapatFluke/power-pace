@@ -1,7 +1,17 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, ChevronDown, MapPin, Timer, LogIn, User as UserIcon } from 'lucide-react';
+import {
+  Plus,
+  ChevronDown,
+  MapPin,
+  Timer,
+  LogIn,
+  User as UserIcon,
+  GripVertical,
+  ArrowUpDown,
+  Check,
+} from 'lucide-react';
 import {
   Exercise,
   WorkoutSession,
@@ -9,7 +19,7 @@ import {
   ExerciseSet,
   GymLocation,
 } from '@/types/workout';
-import { RoutinePreset } from '@/lib/workoutRoutines';
+import { RoutinePreset, swapRoutineDays } from '@/lib/workoutRoutines';
 import { DEFAULT_LOCATIONS } from '@/lib/defaultLocations';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
@@ -46,6 +56,7 @@ import SqlModal from '@/components/SqlModal';
 import RoutineManagerModal from '@/components/RoutineManagerModal';
 import LocationPickerModal from '@/components/LocationPickerModal';
 import AuthModal from '@/components/AuthModal';
+import Sheet from '@/components/Sheet';
 
 export default function Home() {
   // App State
@@ -53,6 +64,12 @@ export default function Home() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [routines, setRoutines] = useState<RoutinePreset[]>([]);
   const [history, setHistory] = useState<WorkoutSession[]>([]);
+
+  // Home Screen Routine Swap & Drag States
+  const [homeDraggingRoutineId, setHomeDraggingRoutineId] = useState<string | null>(null);
+  const [homeDragOverRoutineId, setHomeDragOverRoutineId] = useState<string | null>(null);
+  const [homeSwappingRoutine, setHomeSwappingRoutine] = useState<RoutinePreset | null>(null);
+  const [homeSwapToast, setHomeSwapToast] = useState<string | null>(null);
   const [locations, setLocations] = useState<GymLocation[]>([]);
   const [selectedLocation, setSelectedLocationState] = useState<GymLocation>(
     DEFAULT_LOCATIONS[0]
@@ -384,6 +401,23 @@ export default function Home() {
         return exists ? prev : [...prev, saved || newEx];
       });
       return saved || newEx;
+    }
+  };
+
+  // Swap Routine Days on Home Screen
+  const handleHomeSwapRoutines = (sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return;
+    const routineA = routines.find((r) => r.id === sourceId);
+    const routineB = routines.find((r) => r.id === targetId);
+    const updated = swapRoutineDays(routines, sourceId, targetId);
+    setRoutines(updated);
+    saveLocalRoutines(updated, currentUser?.id);
+    if (currentUser?.id) {
+      syncRoutinesToSupabase(updated, currentUser.id);
+    }
+    if (routineA && routineB) {
+      setHomeSwapToast(`สลับวันสำเร็จ: ${routineA.day} ⇄ ${routineB.day}`);
+      setTimeout(() => setHomeSwapToast(null), 3500);
     }
   };
 
@@ -802,7 +836,13 @@ export default function Home() {
           /* Weekly routine list */
           <div>
             <div className="flex items-baseline justify-between mb-2">
-              <h2 className="text-2xl font-bold">วันนี้เล่นอะไร</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-2xl font-bold">วันนี้เล่นอะไร</h2>
+                <span className="text-[11px] text-faint bg-well px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                  <GripVertical className="w-3 h-3 text-plate-blue" />
+                  ลากสลับวันได้
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsRoutineManagerOpen(true)}
@@ -812,17 +852,70 @@ export default function Home() {
               </button>
             </div>
 
-            <ul className="bg-paper rounded-lg border border-rule divide-y divide-rule overflow-hidden">
+            {/* Swap Toast Banner */}
+            {homeSwapToast && (
+              <div className="mb-2 px-3 py-2 bg-plate-green/10 border border-plate-green/30 text-plate-green text-xs font-semibold rounded-md flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                <Check className="w-4 h-4 shrink-0" />
+                <span>{homeSwapToast}</span>
+              </div>
+            )}
+
+            <ul className="bg-paper rounded-lg border border-rule divide-y divide-rule overflow-hidden shadow-xs">
               {sortedRoutines.map((routine) => {
                 const isToday = isTodayRoutine(routine);
+                const isDragging = homeDraggingRoutineId === routine.id;
+                const isDragOver = homeDragOverRoutineId === routine.id;
 
                 return (
                   <li
                     key={routine.id}
-                    className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${
-                      isToday ? 'bg-well/50 ring-1 ring-inset ring-plate-blue/20' : ''
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', routine.id);
+                      setHomeDraggingRoutineId(routine.id);
+                    }}
+                    onDragEnd={() => {
+                      setHomeDraggingRoutineId(null);
+                      setHomeDragOverRoutineId(null);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (homeDraggingRoutineId && homeDraggingRoutineId !== routine.id) {
+                        setHomeDragOverRoutineId(routine.id);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (homeDragOverRoutineId === routine.id) {
+                        setHomeDragOverRoutineId(null);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const srcId = e.dataTransfer.getData('text/plain') || homeDraggingRoutineId;
+                      if (srcId && srcId !== routine.id) {
+                        handleHomeSwapRoutines(srcId, routine.id);
+                      }
+                      setHomeDraggingRoutineId(null);
+                      setHomeDragOverRoutineId(null);
+                    }}
+                    className={`flex items-center gap-2.5 px-3.5 py-3.5 transition-all select-none ${
+                      isDragging
+                        ? 'opacity-30 border-2 border-dashed border-plate-blue'
+                        : isDragOver
+                        ? 'bg-plate-blue/10 ring-2 ring-plate-blue shadow-md'
+                        : isToday
+                        ? 'bg-well/50 ring-1 ring-inset ring-plate-blue/20'
+                        : 'hover:bg-well/30'
                     }`}
                   >
+                    {/* Drag Handle */}
+                    <div
+                      className="p-1 -ml-1 text-faint hover:text-ink cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+                      title="คลิกค้างแล้วลากเพื่อสลับวัน"
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </div>
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-ink text-base">{routine.name}</span>
@@ -840,17 +933,31 @@ export default function Home() {
                         </span>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleStartRoutine(routine)}
-                      className={`shrink-0 px-4 py-2 rounded-md font-semibold text-sm transition-all ${
-                        isToday
-                          ? 'bg-plate-blue hover:bg-plate-blue-dark text-white shadow-sm'
-                          : 'bg-well hover:bg-rule/70 text-ink'
-                      }`}
-                    >
-                      เริ่ม
-                    </button>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* Quick Swap Days Button */}
+                      <button
+                        type="button"
+                        onClick={() => setHomeSwappingRoutine(routine)}
+                        className="p-2 rounded-md text-mute hover:text-plate-blue hover:bg-well transition-colors"
+                        title="สลับวันกับตารางอื่น"
+                        aria-label="สลับวันกับตารางอื่น"
+                      >
+                        <ArrowUpDown className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleStartRoutine(routine)}
+                        className={`px-4 py-2 rounded-md font-semibold text-sm transition-all shadow-xs ${
+                          isToday
+                            ? 'bg-plate-blue hover:bg-plate-blue-dark text-white'
+                            : 'bg-well hover:bg-rule/70 text-ink'
+                        }`}
+                      >
+                        เริ่ม
+                      </button>
+                    </div>
                   </li>
                 );
               })}
@@ -1046,6 +1153,49 @@ export default function Home() {
           console.log('Successfully logged in as:', userEmail);
         }}
       />
+
+      {/* Quick Swap Routine Days Modal on Home Screen */}
+      {homeSwappingRoutine && (
+        <Sheet
+          title={`สลับวัน: ${homeSwappingRoutine.name}`}
+          description={`ปัจจุบันคือวัน${homeSwappingRoutine.day} — เลือกตารางที่ต้องการสลับวันด้วย:`}
+          onClose={() => setHomeSwappingRoutine(null)}
+          size="md"
+        >
+          <div className="p-4 space-y-2">
+            {routines
+              .filter((r) => r.id !== homeSwappingRoutine.id)
+              .map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => {
+                    handleHomeSwapRoutines(homeSwappingRoutine.id, r.id);
+                    setHomeSwappingRoutine(null);
+                  }}
+                  className="w-full p-3.5 rounded-lg border border-rule hover:border-plate-blue hover:bg-well/70 flex items-center justify-between transition-all text-left group shadow-2xs"
+                >
+                  <div className="min-w-0 flex-1 mr-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-plate-blue bg-plate-blue/10 px-2 py-0.5 rounded-full shrink-0">
+                        วัน{r.day}
+                      </span>
+                      <span className="font-semibold text-ink text-sm group-hover:text-plate-blue transition-colors truncate">
+                        {r.name}
+                      </span>
+                    </div>
+                    <div className="text-xs text-mute mt-1 truncate">
+                      {r.focus} • <span className="num">{r.exerciseIds.length}</span> ท่า
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-full bg-well group-hover:bg-plate-blue group-hover:text-white text-mute transition-colors shrink-0">
+                    <ArrowUpDown className="w-4 h-4" />
+                  </div>
+                </button>
+              ))}
+          </div>
+        </Sheet>
+      )}
     </main>
   );
 }

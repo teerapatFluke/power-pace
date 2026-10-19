@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Plus,
   ChevronDown,
@@ -64,6 +64,7 @@ export default function Home() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [routines, setRoutines] = useState<RoutinePreset[]>([]);
   const [history, setHistory] = useState<WorkoutSession[]>([]);
+  const [todayDayIndex, setTodayDayIndex] = useState<number | null>(null);
 
   // Home Screen Routine Swap & Drag States
   const [homeDraggingRoutineId, setHomeDraggingRoutineId] = useState<string | null>(null);
@@ -145,6 +146,8 @@ export default function Home() {
 
   // Initialize data on mount
   useEffect(() => {
+    setTodayDayIndex(new Date().getDay());
+
     // 1. 100% Online Exercises from Supabase
     const cachedExercises = getLocalExercises();
     setExercises(cachedExercises);
@@ -694,10 +697,10 @@ export default function Home() {
   const openExerciseId =
     expandedExerciseId === undefined ? autoExpandedId : expandedExerciseId;
 
-  // Helper to check if routine matches current day of the week
-  const isTodayRoutine = (routine: RoutinePreset) => {
-    const todayIndex = new Date().getDay(); // 0: Sun, 1: Mon, 2: Tue, 3: Wed, 4: Thu, 5: Fri, 6: Sat
-    const dayKeywords: Record<number, string[]> = {
+  // Identify strictly ONE routine that matches today's day of week (no duplicates)
+  const todayRoutineMatch = useMemo(() => {
+    if (todayDayIndex === null) return null;
+    const dayTargets: Record<number, string[]> = {
       0: ['อาทิตย์', 'sunday', 'sun'],
       1: ['จันทร์', 'monday', 'mon'],
       2: ['อังคาร', 'tuesday', 'tue'],
@@ -706,10 +709,27 @@ export default function Home() {
       5: ['ศุกร์', 'friday', 'fri'],
       6: ['เสาร์', 'saturday', 'sat'],
     };
+    const todayTargets = dayTargets[todayDayIndex] || [];
 
-    const targets = dayKeywords[todayIndex] || [];
-    const text = `${routine.day} ${routine.name} ${routine.id}`.toLowerCase();
-    return targets.some((k) => text.includes(k));
+    // Match strictly against routine.day (never routine.id!)
+    // Pick at most ONE routine for today
+    return (
+      routines.find((r) => {
+        const cleanDay = (r.day || '').trim().toLowerCase().replace(/^วัน/, '');
+        return todayTargets.some((t) => cleanDay === t || cleanDay.startsWith(t));
+      }) ||
+      routines.find((r) => {
+        const cleanName = (r.name || '').trim().toLowerCase().replace(/^วัน/, '');
+        return todayTargets.some((t) => cleanName.startsWith(t));
+      }) ||
+      null
+    );
+  }, [routines, todayDayIndex]);
+
+  const todayRoutineId = todayRoutineMatch ? todayRoutineMatch.id : null;
+
+  const isTodayRoutine = (routine: RoutinePreset) => {
+    return todayRoutineId !== null && routine.id === todayRoutineId;
   };
 
   // Sort routines so today's routine always appears at the very top!

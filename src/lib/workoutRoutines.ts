@@ -315,16 +315,14 @@ export function swapRoutineDays(
   const routineB = routines[indexB];
 
   const updateNameWithNewDay = (oldName: string, oldDay: string, newDay: string): string => {
-    const patterns = [
-      new RegExp(`^วัน${oldDay}\\s*`, 'i'),
-      new RegExp(`^${oldDay}\\s*`, 'i'),
-    ];
-    for (const pattern of patterns) {
-      if (pattern.test(oldName)) {
-        return oldName.replace(pattern, (match) => {
-          return match.startsWith('วัน') ? `วัน${newDay} ` : `${newDay} `;
-        }).trim();
-      }
+    const oldDayClean = oldDay.replace(/^วัน/, '').trim();
+    const newDayClean = newDay.replace(/^วัน/, '').trim();
+
+    if (oldName.includes(`วัน${oldDayClean}`)) {
+      return oldName.replace(`วัน${oldDayClean}`, `วัน${newDayClean}`);
+    }
+    if (oldName.includes(oldDayClean)) {
+      return oldName.replace(oldDayClean, newDayClean);
     }
     return oldName;
   };

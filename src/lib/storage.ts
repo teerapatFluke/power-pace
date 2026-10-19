@@ -311,17 +311,41 @@ export async function fetchExercisesFromSupabase(): Promise<Exercise[] | null> {
   }
 }
 
-export async function saveLocalCustomExercise(exercise: Exercise): Promise<void> {
+export async function saveLocalCustomExercise(exercise: Exercise): Promise<Exercise> {
+  const cleanExercise: Exercise = {
+    ...exercise,
+    name: exercise.name.trim(),
+  };
+
   if (isSupabaseConfigured && supabase) {
     try {
-      await supabase.from('exercises').upsert({
-        name: exercise.name,
-        category: exercise.category,
-        unit_type: exercise.unit_type,
-      });
-      // Refresh online exercises
-      await fetchExercisesFromSupabase();
-      return;
+      const { data, error } = await supabase
+        .from('exercises')
+        .upsert(
+          {
+            name: cleanExercise.name,
+            category: cleanExercise.category,
+            unit_type: cleanExercise.unit_type,
+          },
+          { onConflict: 'name' }
+        )
+        .select('id, name, category, unit_type')
+        .single();
+
+      if (!error && data) {
+        const saved: Exercise = {
+          id: String(data.id),
+          name: data.name,
+          category: data.category,
+          unit_type: data.unit_type,
+          custom: true,
+        };
+        // Refresh online exercises
+        await fetchExercisesFromSupabase();
+        return saved;
+      } else if (error) {
+        console.warn('Could not sync custom exercise to Supabase:', error.message);
+      }
     } catch (e) {
       console.warn('Could not sync custom exercise to Supabase:', e);
     }
@@ -330,9 +354,17 @@ export async function saveLocalCustomExercise(exercise: Exercise): Promise<void>
   if (typeof window !== 'undefined') {
     const raw = localStorage.getItem(CUSTOM_EXERCISES_KEY);
     let custom: Exercise[] = raw ? JSON.parse(raw) : [];
-    custom = [...custom.filter((e) => e.id !== exercise.id), exercise];
+    custom = [
+      ...custom.filter(
+        (e) =>
+          e.id !== cleanExercise.id &&
+          e.name.toLowerCase() !== cleanExercise.name.toLowerCase()
+      ),
+      cleanExercise,
+    ];
     localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(custom));
   }
+  return cleanExercise;
 }
 
 // Smart exercise matcher: matches by id (exact or lowercase), exact name, slug, or keywords

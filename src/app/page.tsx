@@ -367,6 +367,26 @@ export default function Home() {
     }
   };
 
+  const handleCreateCustomExercise = async (newEx: Exercise): Promise<Exercise> => {
+    const saved = await saveLocalCustomExercise(newEx);
+    const online = await fetchExercisesFromSupabase();
+    if (online && online.length > 0) {
+      setExercises(online);
+      const matched = online.find(
+        (e) => e.name.toLowerCase() === newEx.name.toLowerCase()
+      );
+      return matched || saved || newEx;
+    } else {
+      setExercises((prev) => {
+        const exists = prev.some(
+          (e) => e.name.toLowerCase() === newEx.name.toLowerCase()
+        );
+        return exists ? prev : [...prev, saved || newEx];
+      });
+      return saved || newEx;
+    }
+  };
+
   // Add exercise to active workout
   const handleSelectExercise = (exercise: Exercise) => {
     if (!activeWorkout) {
@@ -686,6 +706,13 @@ export default function Home() {
             </button>
             <button
               type="button"
+              onClick={() => setIsAddExerciseOpen(true)}
+              className="px-2.5 py-1.5 rounded-md text-sm font-medium text-ink hover:bg-ink/5"
+            >
+              ท่าฝึก
+            </button>
+            <button
+              type="button"
               onClick={() => setIsHistoryOpen(true)}
               className="px-2.5 py-1.5 rounded-md text-sm font-medium text-ink hover:bg-ink/5"
             >
@@ -829,13 +856,23 @@ export default function Home() {
               })}
             </ul>
 
-            <button
-              type="button"
-              onClick={() => handleStartWorkout('เลือกท่าเอง')}
-              className="mt-3 w-full py-3 rounded-md border border-dashed border-faint text-sm font-medium text-mute hover:text-ink hover:border-ink transition-colors"
-            >
-              เริ่มแบบเลือกท่าเอง
-            </button>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => handleStartWorkout('เลือกท่าเอง')}
+                className="py-2.5 px-3 rounded-md border border-dashed border-faint text-xs font-medium text-mute hover:text-ink hover:border-ink transition-colors text-center"
+              >
+                เริ่มแบบเลือกท่าเอง
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAddExerciseOpen(true)}
+                className="py-2.5 px-3 rounded-md border border-rule bg-paper text-xs font-semibold text-plate-blue hover:border-plate-blue transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                คลังท่า / เพิ่มท่าใหม่
+              </button>
+            </div>
           </div>
         )}
 
@@ -966,6 +1003,7 @@ export default function Home() {
         onSaveRoutines={handleSaveRoutines}
         onStartRoutine={handleStartRoutine}
         onResetToDefault={handleResetRoutines}
+        onCreateCustomExercise={handleCreateCustomExercise}
       />
 
       <AddExerciseModal
@@ -973,15 +1011,7 @@ export default function Home() {
         exercises={exercises}
         onClose={() => setIsAddExerciseOpen(false)}
         onSelectExercise={handleSelectExercise}
-        onCreateCustomExercise={async (newEx) => {
-          await saveLocalCustomExercise(newEx);
-          const online = await fetchExercisesFromSupabase();
-          if (online && online.length > 0) {
-            setExercises(online);
-          } else {
-            setExercises((prev) => [...prev, newEx]);
-          }
-        }}
+        onCreateCustomExercise={handleCreateCustomExercise}
       />
 
       <HistoryModal

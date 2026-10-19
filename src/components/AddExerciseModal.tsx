@@ -10,7 +10,7 @@ interface AddExerciseModalProps {
   exercises: Exercise[];
   onClose: () => void;
   onSelectExercise: (exercise: Exercise) => void;
-  onCreateCustomExercise: (exercise: Exercise) => void;
+  onCreateCustomExercise: (exercise: Exercise) => Promise<any> | void;
 }
 
 const CATEGORIES: MuscleCategory[] = [
@@ -75,7 +75,7 @@ export default function AddExerciseModal({
     return searchTokens.every((token) => searchableText.includes(token));
   });
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customName.trim()) return;
     const newEx: Exercise = {
@@ -85,7 +85,7 @@ export default function AddExerciseModal({
       unit_type: customUnit,
       custom: true,
     };
-    onCreateCustomExercise(newEx);
+    await onCreateCustomExercise(newEx);
     onSelectExercise(newEx);
     setCustomName('');
     setShowCreateForm(false);
@@ -260,17 +260,20 @@ export default function AddExerciseModal({
               )}
 
               {/* Button to open custom form */}
-              <div className="px-4 py-3 border-t border-rule bg-paper">
+              <div className="sticky bottom-0 bg-paper/95 backdrop-blur-sm px-4 py-3 border-t border-rule flex items-center justify-between">
+                <span className="text-xs text-mute">หาท่าที่ต้องการไม่พบ?</span>
                 <button
                   type="button"
                   onClick={() => {
-                    setCustomName('');
+                    setCustomName(search.trim());
+                    if (selectedCategory !== 'All') setCustomCategory(selectedCategory);
+                    if (selectedUnit === 'pin' || selectedUnit === 'kg') setCustomUnit(selectedUnit);
                     setShowCreateForm(true);
                   }}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-plate-blue hover:underline"
+                  className="px-3 py-1.5 rounded-md bg-well hover:bg-rule/70 text-plate-blue font-semibold text-xs inline-flex items-center gap-1 transition-colors"
                 >
-                  <Plus className="w-4 h-4" />
-                  เพิ่มท่าของฉันเอง
+                  <Plus className="w-3.5 h-3.5" />
+                  + สร้างท่าใหม่ / ของฉันเอง
                 </button>
               </div>
             </>

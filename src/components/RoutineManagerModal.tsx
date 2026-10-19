@@ -22,7 +22,7 @@ import {
   ProgramTemplate,
 } from '@/lib/workoutRoutines';
 import { Exercise, MuscleCategory } from '@/types/workout';
-import { findExerciseMatch } from '@/lib/storage';
+import { findExerciseMatch, saveLocalCustomExercise } from '@/lib/storage';
 import Sheet from './Sheet';
 
 const CATEGORIES: MuscleCategory[] = [
@@ -53,6 +53,7 @@ interface RoutineManagerModalProps {
   onSaveRoutines: (updatedRoutines: RoutinePreset[]) => void;
   onStartRoutine: (routine: RoutinePreset) => void;
   onResetToDefault: () => void;
+  onCreateCustomExercise?: (newExercise: Exercise) => Promise<Exercise>;
 }
 
 export default function RoutineManagerModal({
@@ -63,6 +64,7 @@ export default function RoutineManagerModal({
   onSaveRoutines,
   onStartRoutine,
   onResetToDefault,
+  onCreateCustomExercise,
 }: RoutineManagerModalProps) {
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
   const [addingExerciseToRoutineId, setAddingExerciseToRoutineId] = useState<string | null>(null);
@@ -73,6 +75,13 @@ export default function RoutineManagerModal({
   const [newRoutineName, setNewRoutineName] = useState('');
   const [newRoutineDay, setNewRoutineDay] = useState<string>(DAYS_OF_WEEK[0]);
   const [newRoutineFocus, setNewRoutineFocus] = useState('');
+
+  // Custom Exercise creation states inside picker
+  const [isCreatingExerciseInPicker, setIsCreatingExerciseInPicker] = useState(false);
+  const [customExName, setCustomExName] = useState('');
+  const [customExCategory, setCustomExCategory] = useState<MuscleCategory>('Chest');
+  const [customExUnit, setCustomExUnit] = useState<'pin' | 'kg'>('pin');
+  const [isSavingCustomEx, setIsSavingCustomEx] = useState(false);
 
   if (!isOpen) return null;
 
@@ -554,168 +563,348 @@ export default function RoutineManagerModal({
 
         return (
           <Sheet
-            title="เลือกท่าที่จะเพิ่ม"
-            description={targetRoutine ? `เพิ่มลงในตาราง: ${targetRoutine.name}` : undefined}
+            title={isCreatingExerciseInPicker ? 'สร้างท่าใหม่ลงตาราง' : 'เลือกท่าที่จะเพิ่ม'}
+            description={
+              isCreatingExerciseInPicker
+                ? targetRoutine
+                  ? `จะเพิ่มลงในตาราง: ${targetRoutine.name} อัตโนมัติ`
+                  : 'บันทึกเข้าสู่ระบบ Supabase'
+                : targetRoutine
+                ? `เพิ่มลงในตาราง: ${targetRoutine.name}`
+                : undefined
+            }
             onClose={() => {
               setAddingExerciseToRoutineId(null);
               setPickerSearch('');
+              setIsCreatingExerciseInPicker(false);
+              setCustomExName('');
             }}
             size="md"
             stacked
           >
-            {/* Search & Filter Bar */}
-            <div className="sticky top-0 z-10 bg-paper px-4 pt-3 pb-2.5 space-y-2 border-b border-rule">
-              {/* Search Box */}
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="ค้นหาท่า, ส่วนกล้ามเนื้อ, แผ่น, kg..."
-                  value={pickerSearch}
-                  onChange={(e) => setPickerSearch(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 bg-paper border border-rule rounded-md text-ink text-sm placeholder:text-faint focus:outline-none focus:border-plate-blue"
-                />
-                {pickerSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setPickerSearch('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-well text-mute hover:text-ink text-xs"
-                    title="ล้างคำค้นหา"
-                    aria-label="ล้างคำค้นหา"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
+            {isCreatingExerciseInPicker ? (
+              /* Custom Exercise Creation Form inside Routine Picker */
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!customExName.trim() || !addingExerciseToRoutineId) return;
 
-              {/* Category Chips */}
-              <div className="flex gap-1 overflow-x-auto no-scrollbar">
-                {CATEGORIES.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setPickerCategory(cat)}
-                    className={`px-3 py-1 rounded-md text-xs whitespace-nowrap transition-colors ${
-                      pickerCategory === cat
-                        ? 'bg-ink text-paper font-medium'
-                        : 'text-mute hover:bg-well'
-                    }`}
-                  >
-                    {CATEGORY_NAMES_TH[cat]}
-                  </button>
-                ))}
-              </div>
+                  setIsSavingCustomEx(true);
+                  try {
+                    const newEx: Exercise = {
+                      id: `custom-${Date.now()}`,
+                      name: customExName.trim(),
+                      category: customExCategory,
+                      unit_type: customExUnit,
+                      custom: true,
+                    };
 
-              {/* Unit filters & counter */}
-              <div className="flex items-center justify-between text-xs pt-0.5">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setPickerUnit('all')}
-                    className={`px-2 py-0.5 rounded text-[11px] ${
-                      pickerUnit === 'all'
-                        ? 'bg-well text-ink font-semibold'
-                        : 'text-mute hover:text-ink'
-                    }`}
-                  >
-                    ทั้งหมด
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPickerUnit('pin')}
-                    className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 ${
-                      pickerUnit === 'pin'
-                        ? 'bg-well text-plate-blue font-semibold'
-                        : 'text-mute hover:text-ink'
-                    }`}
-                  >
-                    <Layers className="w-3 h-3" />
-                    เครื่อง (แผ่น)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPickerUnit('kg')}
-                    className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 ${
-                      pickerUnit === 'kg'
-                        ? 'bg-well text-plate-blue font-semibold'
-                        : 'text-mute hover:text-ink'
-                    }`}
-                  >
-                    <Dumbbell className="w-3 h-3" />
-                    ฟรีเวท (kg)
-                  </button>
+                    let savedEx = newEx;
+                    if (onCreateCustomExercise) {
+                      savedEx = await onCreateCustomExercise(newEx);
+                    } else {
+                      savedEx = await saveLocalCustomExercise(newEx);
+                    }
+
+                    // Add to current routine immediately
+                    handleAddExerciseToRoutine(addingExerciseToRoutineId, savedEx.id);
+
+                    // Clean up
+                    setIsCreatingExerciseInPicker(false);
+                    setCustomExName('');
+                    setPickerSearch('');
+                  } catch (err) {
+                    console.error('Failed to create custom exercise:', err);
+                  } finally {
+                    setIsSavingCustomEx(false);
+                  }
+                }}
+                className="p-5 space-y-4"
+              >
+                <div>
+                  <label className="text-xs font-semibold text-mute uppercase tracking-wider mb-1.5 block">
+                    ชื่อท่าฝึก (Exercise Name)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="เช่น Incline Cable Fly, Hack Squat"
+                    value={customExName}
+                    onChange={(e) => setCustomExName(e.target.value)}
+                    className="w-full bg-paper border border-rule rounded-md px-3.5 py-2.5 text-ink text-sm placeholder:text-faint focus:outline-none focus:border-plate-blue"
+                  />
                 </div>
 
-                <span className="text-faint text-[11px]">
-                  {filteredPickerExercises.length} / {allExercises.length} ท่า
-                </span>
-              </div>
-            </div>
-
-            {/* List */}
-            {filteredPickerExercises.length === 0 ? (
-              <div className="px-4 py-8 text-center space-y-2">
-                <p className="text-sm text-mute">
-                  ไม่พบท่าที่ตรงกับ <span className="font-semibold text-ink">&ldquo;{pickerSearch}&rdquo;</span>
-                </p>
-                {pickerSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setPickerSearch('')}
-                    className="px-3 py-1.5 rounded-md border border-rule text-xs text-mute hover:text-ink"
+                <div>
+                  <label className="text-xs font-semibold text-mute uppercase tracking-wider mb-1.5 block">
+                    ส่วนกล้ามเนื้อ (Category)
+                  </label>
+                  <select
+                    value={customExCategory}
+                    onChange={(e) => setCustomExCategory(e.target.value as MuscleCategory)}
+                    className="w-full bg-paper border border-rule rounded-md px-3.5 py-2.5 text-ink text-sm focus:outline-none focus:border-plate-blue"
                   >
-                    ล้างคำค้นหา
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="divide-y divide-rule">
-                {filteredPickerExercises.map((ex) => {
-                  const isAlreadyInRoutine = existingIds.includes(ex.id);
+                    {CATEGORIES.filter((c) => c !== 'All').map((c) => (
+                      <option key={c} value={c}>
+                        {CATEGORY_NAMES_TH[c]} ({c})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                  return (
+                <div>
+                  <label className="text-xs font-semibold text-mute uppercase tracking-wider mb-1.5 block">
+                    ประเภทเครื่อง / น้ำหนัก
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-well rounded-md">
                     <button
-                      key={ex.id}
                       type="button"
-                      disabled={isAlreadyInRoutine}
-                      onClick={() => {
-                        handleAddExerciseToRoutine(addingExerciseToRoutineId, ex.id);
-                        setPickerSearch('');
-                      }}
-                      className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-left transition-colors ${
-                        isAlreadyInRoutine
-                          ? 'opacity-50 bg-well/30 cursor-not-allowed'
-                          : 'hover:bg-well cursor-pointer'
+                      onClick={() => setCustomExUnit('pin')}
+                      className={`py-2 px-3 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                        customExUnit === 'pin'
+                          ? 'bg-ink text-paper font-semibold shadow-xs'
+                          : 'text-mute hover:text-ink'
                       }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        {ex.unit_type === 'pin' ? (
-                          <Layers className="w-4 h-4 shrink-0 text-faint" />
-                        ) : (
-                          <Dumbbell className="w-4 h-4 shrink-0 text-faint" />
-                        )}
-                        <div className="min-w-0">
-                          <div className="font-medium text-ink text-sm truncate flex items-center gap-1.5">
-                            <span>{ex.name}</span>
-                            {isAlreadyInRoutine && (
-                              <span className="text-[11px] font-normal text-plate-green flex items-center gap-0.5">
-                                <Check className="w-3 h-3" /> ในตารางแล้ว
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-mute">
-                            {CATEGORY_NAMES_TH[ex.category]}
-                          </div>
-                        </div>
-                      </div>
-
-                      <span className="text-xs text-mute shrink-0">
-                        {ex.unit_type === 'pin' ? 'แผ่น' : 'kg'}
-                      </span>
+                      <Layers className="w-3.5 h-3.5" />
+                      เครื่อง / แผ่นเหล็ก (Pin)
                     </button>
-                  );
-                })}
-              </div>
+                    <button
+                      type="button"
+                      onClick={() => setCustomExUnit('kg')}
+                      className={`py-2 px-3 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                        customExUnit === 'kg'
+                          ? 'bg-ink text-paper font-semibold shadow-xs'
+                          : 'text-mute hover:text-ink'
+                      }`}
+                    >
+                      <Dumbbell className="w-3.5 h-3.5" />
+                      ฟรีเวท (กิโลกรัม / kg)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-3 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={isSavingCustomEx}
+                    onClick={() => {
+                      setIsCreatingExerciseInPicker(false);
+                      setCustomExName('');
+                    }}
+                    className="flex-1 py-2.5 rounded-md border border-rule text-xs font-medium text-mute hover:text-ink transition-colors"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingCustomEx || !customExName.trim()}
+                    className="flex-1 py-2.5 rounded-md bg-plate-blue hover:bg-plate-blue-dark text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 shadow-xs"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {isSavingCustomEx ? 'กำลังบันทึก...' : 'บันทึก & เพิ่มเข้าตาราง'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                {/* Search & Filter Bar */}
+                <div className="sticky top-0 z-10 bg-paper px-4 pt-3 pb-2.5 space-y-2 border-b border-rule">
+                  {/* Search Box */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="ค้นหาท่า, ส่วนกล้ามเนื้อ, แผ่น, kg..."
+                      value={pickerSearch}
+                      onChange={(e) => setPickerSearch(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 bg-paper border border-rule rounded-md text-ink text-sm placeholder:text-faint focus:outline-none focus:border-plate-blue"
+                    />
+                    {pickerSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setPickerSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-well text-mute hover:text-ink text-xs"
+                        title="ล้างคำค้นหา"
+                        aria-label="ล้างคำค้นหา"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Category Chips */}
+                  <div className="flex gap-1 overflow-x-auto no-scrollbar">
+                    {CATEGORIES.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setPickerCategory(cat)}
+                        className={`px-3 py-1 rounded-md text-xs whitespace-nowrap transition-colors ${
+                          pickerCategory === cat
+                            ? 'bg-ink text-paper font-medium'
+                            : 'text-mute hover:bg-well'
+                        }`}
+                      >
+                        {CATEGORY_NAMES_TH[cat]}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Unit filters & counter */}
+                  <div className="flex items-center justify-between text-xs pt-0.5">
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setPickerUnit('all')}
+                        className={`px-2 py-0.5 rounded text-[11px] ${
+                          pickerUnit === 'all'
+                            ? 'bg-well text-ink font-semibold'
+                            : 'text-mute hover:text-ink'
+                        }`}
+                      >
+                        ทั้งหมด
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPickerUnit('pin')}
+                        className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 ${
+                          pickerUnit === 'pin'
+                            ? 'bg-well text-plate-blue font-semibold'
+                            : 'text-mute hover:text-ink'
+                        }`}
+                      >
+                        <Layers className="w-3 h-3" />
+                        เครื่อง (แผ่น)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPickerUnit('kg')}
+                        className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 ${
+                          pickerUnit === 'kg'
+                            ? 'bg-well text-plate-blue font-semibold'
+                            : 'text-mute hover:text-ink'
+                        }`}
+                      >
+                        <Dumbbell className="w-3 h-3" />
+                        ฟรีเวท (kg)
+                      </button>
+                    </div>
+
+                    <span className="text-faint text-[11px]">
+                      {filteredPickerExercises.length} / {allExercises.length} ท่า
+                    </span>
+                  </div>
+                </div>
+
+                {/* List */}
+                {filteredPickerExercises.length === 0 ? (
+                  <div className="px-4 py-10 text-center space-y-3">
+                    <div className="w-10 h-10 rounded-full bg-well flex items-center justify-center mx-auto text-mute">
+                      <Dumbbell className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-ink">
+                        ไม่พบท่าที่ตรงกับ &ldquo;{pickerSearch}&rdquo;
+                      </p>
+                      <p className="text-xs text-mute mt-1">
+                        สร้างท่าฝึกใหม่นี้เพื่อบันทึกลงฐานข้อมูลและเพิ่มเข้าตารางทันที
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-center gap-2 pt-2">
+                      {pickerSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setPickerSearch('')}
+                          className="px-3 py-2 rounded-md border border-rule text-xs text-mute hover:text-ink"
+                        >
+                          ล้างคำค้นหา
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomExName(pickerSearch.trim());
+                          if (pickerCategory !== 'All') setCustomExCategory(pickerCategory);
+                          if (pickerUnit === 'pin' || pickerUnit === 'kg') setCustomExUnit(pickerUnit);
+                          setIsCreatingExerciseInPicker(true);
+                        }}
+                        className="px-3.5 py-2 rounded-md bg-plate-blue hover:bg-plate-blue-dark text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        สร้างท่า {pickerSearch.trim() ? `"${pickerSearch.trim()}"` : 'ใหม่'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-rule">
+                    {filteredPickerExercises.map((ex) => {
+                      const isAlreadyInRoutine = existingIds.includes(ex.id);
+
+                      return (
+                        <button
+                          key={ex.id}
+                          type="button"
+                          disabled={isAlreadyInRoutine}
+                          onClick={() => {
+                            handleAddExerciseToRoutine(addingExerciseToRoutineId, ex.id);
+                            setPickerSearch('');
+                          }}
+                          className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-left transition-colors ${
+                            isAlreadyInRoutine
+                              ? 'opacity-50 bg-well/30 cursor-not-allowed'
+                              : 'hover:bg-well cursor-pointer'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {ex.unit_type === 'pin' ? (
+                              <Layers className="w-4 h-4 shrink-0 text-faint" />
+                            ) : (
+                              <Dumbbell className="w-4 h-4 shrink-0 text-faint" />
+                            )}
+                            <div className="min-w-0">
+                              <div className="font-medium text-ink text-sm truncate flex items-center gap-1.5">
+                                <span>{ex.name}</span>
+                                {isAlreadyInRoutine && (
+                                  <span className="text-[11px] font-normal text-plate-green flex items-center gap-0.5">
+                                    <Check className="w-3 h-3" /> ในตารางแล้ว
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-mute">
+                                {CATEGORY_NAMES_TH[ex.category]}
+                              </div>
+                            </div>
+                          </div>
+
+                          <span className="text-xs text-mute shrink-0">
+                            {ex.unit_type === 'pin' ? 'แผ่น' : 'kg'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Persistent Bottom Bar to create custom exercise anytime */}
+                <div className="sticky bottom-0 bg-paper/95 backdrop-blur-sm px-4 py-3 border-t border-rule flex items-center justify-between">
+                  <span className="text-xs text-mute">หาท่าที่ต้องการไม่พบ?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomExName(pickerSearch.trim());
+                      if (pickerCategory !== 'All') setCustomExCategory(pickerCategory);
+                      if (pickerUnit === 'pin' || pickerUnit === 'kg') setCustomExUnit(pickerUnit);
+                      setIsCreatingExerciseInPicker(true);
+                    }}
+                    className="px-3 py-1.5 rounded-md bg-well hover:bg-rule/70 text-plate-blue font-semibold text-xs inline-flex items-center gap-1 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    + สร้างท่าใหม่
+                  </button>
+                </div>
+              </>
             )}
           </Sheet>
         );

@@ -5,7 +5,6 @@ import {
   Plus,
   ChevronDown,
   MapPin,
-  Timer,
   LogIn,
   User as UserIcon,
   GripVertical,
@@ -49,7 +48,6 @@ import {
 } from '@/lib/storage';
 import ExerciseCard from '@/components/ExerciseCard';
 import AddExerciseModal from '@/components/AddExerciseModal';
-import RestTimer from '@/components/RestTimer';
 import WorkoutSummaryModal from '@/components/WorkoutSummaryModal';
 import HistoryModal from '@/components/HistoryModal';
 import SqlModal from '@/components/SqlModal';
@@ -90,10 +88,6 @@ export default function Home() {
   );
   const [finishedWorkout, setFinishedWorkout] = useState<WorkoutSession | null>(null);
   const [lastSyncSuccess, setLastSyncSuccess] = useState(false);
-
-  // Rest Timer State
-  const [isRestTimerActive, setIsRestTimerActive] = useState(false);
-  const [restTimerSeconds, setRestTimerSeconds] = useState(90);
 
   // Supabase status
   const [supabaseStatus, setSupabaseStatus] = useState<{
@@ -564,16 +558,12 @@ export default function Home() {
     });
   };
 
-  // Toggle set completion and activate rest timer
+  // Toggle set completion
   const handleToggleCompleteSet = (
     workoutExerciseId: string,
     setId: string
   ) => {
     if (!activeWorkout) return;
-    const target = activeWorkout.exercises
-      .find((ex) => ex.id === workoutExerciseId)
-      ?.sets.find((s) => s.id === setId);
-    const shouldStartTimer = Boolean(target && !target.is_completed);
 
     setActiveWorkout((prev) => {
       if (!prev) return null;
@@ -589,11 +579,6 @@ export default function Home() {
       });
       return { ...prev, exercises: updatedExercises };
     });
-
-    if (shouldStartTimer) {
-      setIsRestTimerActive(true);
-      setRestTimerSeconds(90);
-    }
   };
 
   // Delete set
@@ -842,14 +827,6 @@ export default function Home() {
                 <span className="num text-lg font-semibold text-ink">{completedSets}</span>{' '}
                 เซ็ตที่เล่นแล้ว
               </span>
-              <button
-                type="button"
-                onClick={() => setIsRestTimerActive(true)}
-                className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rule text-ink font-medium hover:bg-paper"
-              >
-                <Timer className="w-4 h-4" />
-                พัก 90 วิ
-              </button>
             </div>
           </div>
         ) : (
@@ -1104,12 +1081,6 @@ export default function Home() {
           </div>
         )}
       </div>
-
-      <RestTimer
-        isActive={isRestTimerActive}
-        initialSeconds={restTimerSeconds}
-        onClose={() => setIsRestTimerActive(false)}
-      />
 
       {/* Modals */}
       <LocationPickerModal

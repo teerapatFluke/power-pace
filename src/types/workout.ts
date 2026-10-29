@@ -59,5 +59,6 @@ export interface WorkoutSession {
   exercises: WorkoutExercise[];
   is_completed: boolean;
   created_at?: string;
+  started_at?: number;
 }
 

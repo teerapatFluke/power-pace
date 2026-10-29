@@ -135,7 +135,19 @@ export default function Home() {
 
     // 3. Load active workout for this user
     const active = getLocalActiveWorkout(uid);
-    setActiveWorkout(active);
+    if (active && !active.is_completed) {
+      const now = Date.now();
+      const startTime =
+        active.started_at || now - (active.duration_seconds || 0) * 1000;
+      const elapsed = Math.max(0, Math.floor((now - startTime) / 1000));
+      setActiveWorkout({
+        ...active,
+        started_at: startTime,
+        duration_seconds: elapsed,
+      });
+    } else {
+      setActiveWorkout(active);
+    }
   };
 
   // Initialize data on mount
@@ -195,26 +207,68 @@ export default function Home() {
     }
   }, [activeWorkout, currentUser]);
 
-  // Workout duration ticker
+  // Workout duration ticker based on wall-clock time
   useEffect(() => {
-    if (activeWorkout && !activeWorkout.is_completed) {
-      workoutTimerRef.current = setInterval(() => {
-        setActiveWorkout((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            duration_seconds: prev.duration_seconds + 1,
-          };
-        });
-      }, 1000);
-    } else {
+    if (!activeWorkout || activeWorkout.is_completed) {
       if (workoutTimerRef.current) clearInterval(workoutTimerRef.current);
+      return;
+    }
+
+    const now = Date.now();
+    const startTime =
+      activeWorkout.started_at || now - (activeWorkout.duration_seconds || 0) * 1000;
+
+    const updateDuration = () => {
+      const currentNow = Date.now();
+      const elapsed = Math.max(0, Math.floor((currentNow - startTime) / 1000));
+      setActiveWorkout((prev) => {
+        if (!prev || prev.is_completed) return prev;
+        if (prev.duration_seconds === elapsed && prev.started_at === startTime) {
+          return prev;
+        }
+        return {
+          ...prev,
+          started_at: startTime,
+          duration_seconds: elapsed,
+        };
+      });
+    };
+
+    updateDuration();
+    workoutTimerRef.current = setInterval(updateDuration, 1000);
+
+    // Sync immediately when screen unlocks, tab becomes visible, or phone wakes up!
+    const handleSync = () => {
+      updateDuration();
+    };
+
+    document.addEventListener('visibilitychange', handleSync);
+    window.addEventListener('pageshow', handleSync);
+    window.addEventListener('focus', handleSync);
+
+    // Keep screen awake while actively viewing workout (if supported by browser)
+    let wakeLockSentinel: any = null;
+    if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+      const requestWakeLock = async () => {
+        try {
+          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+        } catch {
+          // Ignore if user or system denies
+        }
+      };
+      requestWakeLock();
     }
 
     return () => {
       if (workoutTimerRef.current) clearInterval(workoutTimerRef.current);
+      document.removeEventListener('visibilitychange', handleSync);
+      window.removeEventListener('pageshow', handleSync);
+      window.removeEventListener('focus', handleSync);
+      if (wakeLockSentinel && typeof wakeLockSentinel.release === 'function') {
+        wakeLockSentinel.release().catch(() => {});
+      }
     };
-  }, [Boolean(activeWorkout)]);
+  }, [activeWorkout?.id, activeWorkout?.is_completed, activeWorkout?.started_at]);
 
   // Handle location selection
   const handleSelectLocation = (loc: GymLocation) => {
@@ -290,11 +344,13 @@ export default function Home() {
   // Start new empty workout
   const handleStartWorkout = (title = 'คอร์สเวทเทรนนิ่ง') => {
     const today = new Date().toISOString().split('T')[0];
+    const now = Date.now();
     const newSession: WorkoutSession = {
-      id: `workout-${Date.now()}`,
+      id: `workout-${now}`,
       title,
       date: today,
       duration_seconds: 0,
+      started_at: now,
       location_id: selectedLocation.id,
       location_name: selectedLocation.name,
       exercises: [],
@@ -347,11 +403,13 @@ export default function Home() {
       })
       .filter(Boolean) as WorkoutExercise[];
 
+    const now = Date.now();
     const newSession: WorkoutSession = {
-      id: `workout-${Date.now()}`,
+      id: `workout-${now}`,
       title: routine.name,
       date: today,
       duration_seconds: 0,
+      started_at: now,
       location_id: selectedLocation.id,
       location_name: selectedLocation.name,
       exercises: initialExercises,
@@ -458,12 +516,14 @@ export default function Home() {
 
     setExpandedExerciseId(newWorkoutExercise.id);
     setActiveWorkout((prev) => {
+      const now = Date.now();
       if (!prev) {
         return {
-          id: `workout-${Date.now()}`,
+          id: `workout-${now}`,
           title: 'คอร์สเวทเทรนนิ่ง',
           date: new Date().toISOString().split('T')[0],
           duration_seconds: 0,
+          started_at: now,
           location_id: selectedLocation.id,
           location_name: selectedLocation.name,
           exercises: [newWorkoutExercise],
@@ -630,11 +690,18 @@ export default function Home() {
   const handleFinishWorkout = async () => {
     if (!activeWorkout || activeWorkout.exercises.length === 0) return;
 
+    const now = Date.now();
+    const finalDuration = activeWorkout.started_at
+      ? Math.max(0, Math.floor((now - activeWorkout.started_at) / 1000))
+      : activeWorkout.duration_seconds;
+
     const completedWorkout: WorkoutSession = {
       ...activeWorkout,
+      duration_seconds: finalDuration,
       is_completed: true,
       location_id: selectedLocation.id,
       location_name: selectedLocation.name,
+      created_at: new Date().toISOString(),
     };
 
     // Save to local storage history

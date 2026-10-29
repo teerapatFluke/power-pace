@@ -19,32 +19,46 @@ export default function RestTimer({
   const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const endTimeRef = useRef<number>(Date.now() + initialSeconds * 1000);
 
   useEffect(() => {
     if (isActive) {
       setSecondsLeft(initialSeconds);
       setTotalSeconds(initialSeconds);
+      endTimeRef.current = Date.now() + initialSeconds * 1000;
     }
   }, [isActive, initialSeconds]);
 
   useEffect(() => {
     if (!isActive) return;
 
-    timerRef.current = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          if (soundEnabled) {
-            playRestTimerBeep();
-          }
-          clearInterval(timerRef.current!);
-          return 0;
+    const syncRemaining = () => {
+      const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining === 0) {
+        if (soundEnabled) {
+          playRestTimerBeep();
         }
-        return prev - 1;
-      });
-    }, 1000);
+        if (timerRef.current) clearInterval(timerRef.current);
+      }
+    };
+
+    syncRemaining();
+    timerRef.current = setInterval(syncRemaining, 500);
+
+    const handleSync = () => {
+      syncRemaining();
+    };
+
+    document.addEventListener('visibilitychange', handleSync);
+    window.addEventListener('pageshow', handleSync);
+    window.addEventListener('focus', handleSync);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      document.removeEventListener('visibilitychange', handleSync);
+      window.removeEventListener('pageshow', handleSync);
+      window.removeEventListener('focus', handleSync);
     };
   }, [isActive, soundEnabled]);
 
@@ -60,7 +74,9 @@ export default function RestTimer({
   const progress = totalSeconds > 0 ? secondsLeft / totalSeconds : 0;
 
   const adjust = (delta: number) => {
-    setSecondsLeft((prev) => Math.max(0, prev + delta));
+    endTimeRef.current = Math.max(Date.now(), endTimeRef.current + delta * 1000);
+    const newSeconds = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
+    setSecondsLeft(newSeconds);
     if (delta > 0) setTotalSeconds((prev) => prev + delta);
   };
 
